@@ -207,6 +207,12 @@ body {
     padding: 20px; background: #141417; border-top: 1px solid var(--border);
     display: flex; gap: 10px;
 }
+/* Кнопка ответа */
+.reply-btn {
+    background: none; border: none; color: #64748b; cursor: pointer;
+    font-size: 0.8rem; padding: 4px 8px; transition: 0.2s; opacity: 0.6;
+}
+.reply-btn:hover { color: var(--accent); opacity: 1; }
 
 /* MESSAGES */
 .msg-row {
@@ -291,7 +297,12 @@ label { font-size: 0.85rem; color: var(--text-muted); font-weight: 700; margin-l
 .modal-wide { max-width: 800px; height: 80vh; }
 
 .modal-head { padding: 20px 25px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #18181b; }
-.modal-head h3 { font-size: 1.2rem; font-weight: 700; color: white; margin: 0; display:flex; align-items:center; gap:10px; }
+.modal-head h3 { 
+    font-size: 1.2rem; font-weight: 700; color: white; margin: 0; 
+    display:flex; align-items:center; gap:10px; 
+    /* FIX бесконечных заголовков */
+    max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .close-btn { background: none; border: none; color: #666; font-size: 1.5rem; cursor: pointer; transition: 0.2s; }
 .close-btn:hover { color: var(--red); transform: rotate(90deg); }
 
