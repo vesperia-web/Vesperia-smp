@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vesperia SMP | Главная</title>
+    <link rel="icon" href="https://i.postimg.cc/Pf4nb7xV/logo.png">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="page-home">
+    <canvas id="star-canvas"></canvas>
+    <div class="glow-bg"></div>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-brand">
+                <img src="https://i.postimg.cc/Pf4nb7xV/logo.png" alt="Logo">
+                <span>VESPERIA</span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html" class="nav-item active">Главная</a>
+                <a href="forum.html" class="nav-item">Форум</a>
+                <a href="wiki.html" class="nav-item">Вики</a>
+                <a href="rules.html" class="nav-item">Правила</a>
+                <a href="gallery.html" class="nav-item">Галерея</a>
+            </div>
+            <div class="nav-actions">
+                <div id="authContainer">
+                    <button class="btn btn-discord" onclick="login()"><i class="fab fa-discord"></i> Войти</button>
+                </div>
+                <button class="menu-toggle" onclick="document.querySelector('.nav-links').classList.toggle('active')"><i class="fas fa-bars"></i></button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content-container">
+        <div class="hero">
+            <div class="hero-logo-box">
+                <div class="logo-aura"></div>
+                <img src="https://i.postimg.cc/Pf4nb7xV/logo.png" alt="Big Logo" class="hero-img">
+            </div>
+            <h1 class="hero-title">VESPERIA <span class="accent">SMP</span></h1>
+            <p class="hero-subtitle">Уникальный политический сервер с упором на магию и экономику. Создай свою историю.</p>
+            <div class="hero-btns">
+                <div class="ip-box" onclick="copyIp()">
+                    <span class="ip-label">IP:</span>
+                    <span class="ip-val">play.vesperiasmp.ru</span>
+                    <i class="fas fa-copy"></i>
+                </div>
+                <a href="https://discord.gg/yourinvite" target="_blank" class="btn btn-primary"><i class="fab fa-discord"></i> Discord</a>
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feat-card">
+                <i class="fas fa-crown"></i>
+                <h3>Лор Сообщества</h3>
+                <p>Все события на сервере фиксируются в истории, которую пишут игроки.</p>
+            </div>
+            <div class="feat-card">
+                <i class="fas fa-gem"></i>
+                <h3>Экономика</h3>
+                <p>Свободный рынок, аукционы и возможность создавать свои банки.</p>
+            </div>
+            <div class="feat-card">
+                <i class="fas fa-wand-magic-sparkles"></i>
+                <h3>Магия</h3>
+                <p>Кастомные заклинания и артефакты, добываемые в опасных походах.</p>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast" class="toast-box"></div>
+    <script src="script.js"></script>
+</body>
+</html>
