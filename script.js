@@ -41,7 +41,6 @@ async function logout() {
 async function syncUserProfile() {
     if (!currentUser) return;
     try {
-        // Пытаемся записать пользователя в таблицу public.users
         const { data, error } = await sb.from('users').upsert({
             id: currentUser.id,
             username: currentUser.user_metadata.full_name,
@@ -51,7 +50,7 @@ async function syncUserProfile() {
         if (error) {
             console.error('Ошибка БД (Sync):', error);
             if (error.code === '42P01') {
-                showToast('ОШИБКА: Таблицы не созданы в Supabase!', true);
+                showToast('ОШИБКА: Таблицы не созданы (выполни SQL)', true);
             }
             return;
         }
@@ -101,8 +100,11 @@ async function submitPost() {
 
     if (error) {
         console.error('Post Error:', error);
-        if (error.code === '42P01') showToast('Ошибка: Нет таблицы topics!', true);
-        else if (error.code === '42703') showToast('Ошибка: Неверные колонки в БД!', true);
+        if (error.message.includes('schema cache')) {
+            showToast('Кеш схемы устарел. Перезагружаю...', true);
+            setTimeout(() => window.location.reload(), 2000);
+        }
+        else if (error.code === '42P01') showToast('Ошибка: Нет таблицы topics! (SQL)', true);
         else showToast('Ошибка: ' + error.message, true);
     } else {
         showToast('Тема создана!');
@@ -139,7 +141,6 @@ async function loadTopics() {
             deleteBtn = `<button class="post-del-btn" onclick="deleteTopic(${topic.id})" title="Удалить тему"><i class="fas fa-trash"></i></button>`;
         }
 
-        // Пытаемся получить имя автора из JOIN (если таблица users настроена верно), иначе 'Unknown'
         const authorName = topic.users ? topic.users.username : 'Игрок';
         const authorAva = topic.users ? topic.users.avatar_url : 'https://i.postimg.cc/Pf4nb7xV/logo.png';
 
