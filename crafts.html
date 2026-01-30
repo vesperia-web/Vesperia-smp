@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vesperia | Крафты</title>
+    <link rel="icon" href="https://i.postimg.cc/Pf4nb7xV/logo.png">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="page-wiki">
+    <canvas id="star-canvas"></canvas>
+    <div class="glow-bg"></div>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-brand">
+                <img src="https://i.postimg.cc/Pf4nb7xV/logo.png" alt="Logo">
+                <span>VESPERIA</span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html" class="nav-item">Главная</a>
+                <a href="forum.html" class="nav-item">Форум</a>
+                <a href="wiki.html" class="nav-item active">Вики</a>
+                <a href="rules.html" class="nav-item">Правила</a>
+            </div>
+            <div class="nav-actions">
+                <div id="authContainer">
+                    <button class="btn btn-discord" onclick="login()"><i class="fab fa-discord"></i> Войти</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content-container">
+        <div class="hero">
+            <h1 class="hero-title">Кастомные <span class="accent">Крафты</span></h1>
+            <a href="wiki.html" class="back-btn">← Вернуться назад</a>
+        </div>
+
+        <div class="crafting-container">
+            <div class="craft-title"><i class="fas fa-cube"></i> Генератор Разлома</div>
+            <p style="color:#ccc; margin-bottom: 20px; text-align: center; max-width:500px;">
+                Используется для призыва аномалии (Разлома). <br>Осколки реальности выпадают с нежити-лидеров.
+            </p>
+
+            <div class="crafting-ui">
+                <div class="craft-grid">
+                    <!-- Row 1 -->
+                    <div class="slot" data-name="Осколок Реальности"><img src="https://mcicons.ccleaf.com/assets/10.%20Items/21.%20Decoration/Amethyst_Shard.png"></div>
+                    <div class="slot" data-name="Осколок Реальности"><img src="https://mcicons.ccleaf.com/assets/10.%20Items/21.%20Decoration/Amethyst_Shard.png"></div>
+                    <div class="slot" data-name="Осколок Реальности"><img src="https://mcicons.ccleaf.com/assets/10.%20Items/21.%20Decoration/Amethyst_Shard.png"></div>
+                    <!-- Row 2 -->
+                    <div class="slot" data-name="Осколок Реальности"><img src="https://mcicons.ccleaf.com/assets/10.%20Items/21.%20Decoration/Amethyst_Shard.png"></div>
+                    <div class="slot" data-name="Плачущий Обсидиан"><img src="https://mcicons.ccleaf.com/assets/20.%20Blocks/18.%20Decoration/Crying_Obsidian.png"></div>
+                    <div class="slot" data-name="Осколок Реальности"><img src="https://mcicons.ccleaf.com/assets/10.%20Items/21.%20Decoration/Amethyst_Shard.png"></div>
+                    <!-- Row 3 -->
+                    <div class="slot" data-name="Осколок Реальности"><img src="https://mcicons.ccleaf.com/assets/10.%20Items/21.%20Decoration/Amethyst_Shard.png"></div>
+                    <div class="slot" data-name="Осколок Реальности"><img src="https://mcicons.ccleaf.com/assets/10.%20Items/21.%20Decoration/Amethyst_Shard.png"></div>
+                    <div class="slot" data-name="Осколок Реальности"><img src="https://mcicons.ccleaf.com/assets/10.%20Items/21.%20Decoration/Amethyst_Shard.png"></div>
+                </div>
+
+                <div class="craft-arrow">➜</div>
+
+                <div class="result-slot" data-name="Генератор Разлома">
+                    <img src="https://mcicons.ccleaf.com/assets/20.%20Blocks/33.%20Workplaces/Respawn_Anchor.png">
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer><p>&copy; 2026 Vesperia SMP.</p></footer>
+    <script src="script.js"></script>
+</body>
+</html>
