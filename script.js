@@ -156,6 +156,7 @@ async function submitPost() {
     const content = document.getElementById('postContent').value.trim();
 
     if (!title || !content) return showToast('Заполните все поля!', true);
+    if (title.length > 60) return showToast('Заголовок слишком длинный (макс 60)', true);
 
     const { error } = await sb.from('topics').insert([{
         title: title, 
@@ -210,6 +211,9 @@ async function openTopic(topicId) {
     const opName = topic.users ? topic.users.username : 'Автор';
     const opIsMe = currentUser && topic.author_id === currentUser.id;
     
+    // Reply logic for OP (replying to author)
+    const replyOpBtn = !opIsMe ? `<button class="reply-btn" onclick="replyTo('${opName}')" title="Ответить"><i class="fas fa-reply"></i></button>` : '';
+
     let html = `
         <div class="msg-row ${opIsMe ? 'mine' : ''}">
             <img src="${opAva}" class="msg-avatar">
@@ -217,6 +221,7 @@ async function openTopic(topicId) {
                 <div class="msg-header">
                     <span class="msg-author">${opName} <i class="fas fa-crown" style="color:#fbbf24; margin-left:4px;" title="Автор темы"></i></span>
                     <span>${new Date(topic.created_at).toLocaleTimeString().slice(0,5)}</span>
+                    ${replyOpBtn}
                 </div>
                 <div class="msg-bubble" style="border-color: #fbbf24; background: rgba(251, 191, 36, 0.05);">
                     ${escapeHtml(topic.description)}
@@ -227,13 +232,16 @@ async function openTopic(topicId) {
     `;
 
     // 3. Get Comments
-    // Важно: в SQL нужна таблица comments
     const { data: comments, error: commError } = await sb.from('comments')
         .select('*, users(*)')
         .eq('topic_id', topicId)
         .order('created_at', { ascending: true });
-
-    if (!commError && comments) {
+        
+    if (commError) {
+        if (commError.code === '42P01') {
+             html += '<div style="color:#666; font-size:0.8rem; text-align:center;">Чат недоступен (нет таблицы comments).</div>';
+        }
+    } else if (comments) {
         html += comments.map(c => {
             const isMe = currentUser && c.user_id === currentUser.id;
             const isAuthor = c.user_id === topic.author_id;
@@ -241,6 +249,8 @@ async function openTopic(topicId) {
             const userName = c.users ? c.users.username : 'Unknown';
             
             const badge = isAuthor ? '<i class="fas fa-crown author-badge" title="Автор темы"></i>' : '';
+            // Don't show reply button on own messages
+            const replyBtn = !isMe ? `<button class="reply-btn" onclick="replyTo('${userName}')" title="Ответить"><i class="fas fa-reply"></i></button>` : '';
 
             return `
             <div class="msg-row ${isMe ? 'mine' : ''}">
@@ -248,7 +258,7 @@ async function openTopic(topicId) {
                 <div class="msg-content">
                     <div class="msg-header">
                         ${isMe ? `<span>${new Date(c.created_at).toLocaleTimeString().slice(0,5)}</span> <span class="msg-author">Вы</span>` 
-                               : `<span class="msg-author">${userName}${badge}</span> <span>${new Date(c.created_at).toLocaleTimeString().slice(0,5)}</span>`}
+                               : `<span class="msg-author">${userName}${badge}</span> <span>${new Date(c.created_at).toLocaleTimeString().slice(0,5)}</span> ${replyBtn}`}
                     </div>
                     <div class="msg-bubble">
                         ${escapeHtml(c.content)}
@@ -262,6 +272,13 @@ async function openTopic(topicId) {
 
     container.innerHTML = html;
     container.scrollTop = container.scrollHeight; // Scroll to bottom
+}
+
+function replyTo(username) {
+    const input = document.getElementById('commentInput');
+    if (!input) return;
+    input.value = `@${username}, ` + input.value;
+    input.focus();
 }
 
 async function submitComment() {
