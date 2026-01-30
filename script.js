@@ -6,13 +6,12 @@ const sb = supabase.createClient(SB_URL, SB_KEY);
 
 let currentUser = null;
 let isAdmin = false;
-let currentTopicId = null; // Для отслеживания открытой темы
+let currentTopicId = null;
 
 // INIT
 window.addEventListener('DOMContentLoaded', async () => {
     initStars();
     
-    // Проверка сессии
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
         currentUser = session.user;
@@ -20,12 +19,10 @@ window.addEventListener('DOMContentLoaded', async () => {
         updateAuthUI();
     }
 
-    // Роутинг
     const path = window.location.pathname;
     if (path.includes('forum.html')) loadTopics();
     if (path.includes('gallery.html')) loadGallery();
     
-    // Enter to send comment
     const commentInput = document.getElementById('commentInput');
     if (commentInput) {
         commentInput.addEventListener('keypress', function (e) {
@@ -47,7 +44,6 @@ async function logout() {
     window.location.reload();
 }
 
-// SYNC USER & CHECK ADMIN
 async function syncUserProfile() {
     if (!currentUser) return;
     try {
@@ -57,20 +53,13 @@ async function syncUserProfile() {
             avatar_url: currentUser.user_metadata.avatar_url
         }).select('role').single();
 
-        if (error) {
-            console.error('Ошибка БД (Sync):', error);
-            if (error.code === '42P01') {
-                showToast('ОШИБКА: Таблицы не созданы (выполни SQL)', true);
-            }
-            return;
-        }
-
         if (data && data.role === 'admin') {
             isAdmin = true;
         }
-    } catch (e) {
-        console.error('Critical Sync Error:', e);
-    }
+        if (error && error.code === '42P01') {
+            showToast('ERR: Tables not found', true);
+        }
+    } catch (e) { console.error(e); }
 }
 
 function updateAuthUI() {
@@ -87,24 +76,26 @@ function updateAuthUI() {
                 <button onclick="logout()" style="background:none; border:none; color:#ef4444; cursor:pointer; opacity:0.8;"><i class="fas fa-sign-out-alt"></i></button>
             </div>
         `;
+        // Только админ видит кнопки "Добавить" в галерее
         document.querySelectorAll('.auth-only').forEach(btn => {
-            btn.style.setProperty('display', 'inline-flex', 'important');
+            if (btn.innerText.includes('тему') || isAdmin) {
+               btn.style.setProperty('display', 'inline-flex', 'important');
+            }
         });
     }
 }
 
-// FORUM - TOPICS LIST
+// === FORUM ===
+
 async function loadTopics() {
     const grid = document.getElementById('postsGrid');
     if (!grid) return;
     
+    // Получаем список тем
     const { data, error } = await sb.from('topics').select('*, users(username, avatar_url)').order('created_at', { ascending: false });
 
     if (error) {
-        console.error('Load Topics Error:', error);
-        if (error.code === '42P01') {
-             grid.innerHTML = '<div style="color:red; text-align:center;">ОШИБКА: Таблицы не созданы. Выполните SQL код в Supabase.</div>';
-        }
+        if (error.code === '42P01') grid.innerHTML = '<div style="color:red; text-align:center;">ОШИБКА: Выполните SQL код в Supabase!</div>';
         return;
     }
 
@@ -115,32 +106,42 @@ async function loadTopics() {
 
     grid.innerHTML = data.map(topic => {
         const isOwner = currentUser && topic.author_id === currentUser.id;
-        let deleteBtn = '';
+        let actions = '';
+        
+        // ADMIN: Удаление
+        if (isAdmin) {
+            actions += `<button class="post-btn delete" onclick="event.stopPropagation(); deleteTopic(${topic.id})" title="Удалить"><i class="fas fa-trash"></i></button>`;
+        }
+        
+        // ADMIN & OWNER: Закрыть/Открыть
         if (isAdmin || isOwner) {
-            // Кнопка удаления не вызывает onclick родителя (event.stopPropagation)
-            deleteBtn = `<button class="post-del-btn" onclick="event.stopPropagation(); deleteTopic(${topic.id})" title="Удалить тему"><i class="fas fa-trash"></i></button>`;
+            const lockIcon = topic.is_closed ? 'fa-lock-open' : 'fa-lock';
+            const lockTitle = topic.is_closed ? 'Открыть тему' : 'Закрыть тему';
+            actions += `<button class="post-btn lock" onclick="event.stopPropagation(); toggleTopicStatus(${topic.id}, ${topic.is_closed})" title="${lockTitle}"><i class="fas ${lockIcon}"></i></button>`;
         }
 
         const authorName = topic.users ? topic.users.username : 'Игрок';
         const authorAva = topic.users ? topic.users.avatar_url : 'https://i.postimg.cc/Pf4nb7xV/logo.png';
-        
-        // Truncate logic
+        const closedClass = topic.is_closed ? 'closed' : '';
+        const closedLabel = topic.is_closed ? '<span class="closed-icon"><i class="fas fa-lock"></i> Закрыто</span>' : '';
+
+        // Обрезка текста
         let shortDesc = topic.description || '';
-        if (shortDesc.length > 100) {
-            shortDesc = shortDesc.substring(0, 100) + '...';
-        }
+        if (shortDesc.length > 100) shortDesc = shortDesc.substring(0, 100) + '...';
 
         return `
-        <div class="post-entry" onclick="openTopic(${topic.id})">
+        <div class="post-entry ${closedClass}" onclick="openTopic(${topic.id})">
             <div class="post-header">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <img src="${authorAva}" style="width:30px; height:30px; border-radius:50%;">
                     <div style="display:flex; flex-direction:column; overflow:hidden;">
-                        <span class="post-title">${escapeHtml(topic.title)}</span>
+                        <span class="post-title">${escapeHtml(topic.title)} ${closedLabel}</span>
                         <span class="post-meta" style="font-size:0.75rem;">${authorName} • ${new Date(topic.created_at).toLocaleDateString()}</span>
                     </div>
                 </div>
-                ${deleteBtn}
+                <div class="topic-actions">
+                    ${actions}
+                </div>
             </div>
             <div class="post-body">
                ${escapeHtml(shortDesc)}
@@ -151,12 +152,11 @@ async function loadTopics() {
 
 async function submitPost() {
     if (!currentUser) return showToast('Сначала войдите в аккаунт!', true);
-    
     const title = document.getElementById('postTitle').value.trim();
     const content = document.getElementById('postContent').value.trim();
 
     if (!title || !content) return showToast('Заполните все поля!', true);
-    if (title.length > 60) return showToast('Заголовок слишком длинный (макс 60)', true);
+    if (title.length > 60) return showToast('Заголовок макс. 60 символов', true);
 
     const { error } = await sb.from('topics').insert([{
         title: title, 
@@ -164,10 +164,8 @@ async function submitPost() {
         author_id: currentUser.id
     }]);
 
-    if (error) {
-        console.error('Post Error:', error);
-        showToast('Ошибка: ' + error.message, true);
-    } else {
+    if (error) showToast('Ошибка: ' + error.message, true);
+    else {
         showToast('Тема создана!');
         closeModals();
         loadTopics();
@@ -177,28 +175,31 @@ async function submitPost() {
 }
 
 async function deleteTopic(id) {
-    if (!confirm('Удалить эту тему?')) return;
+    if (!confirm('АДМИН: Удалить тему навсегда?')) return;
     const { error } = await sb.from('topics').delete().eq('id', id);
-    if (error) showToast('Ошибка: ' + error.message, true);
-    else {
-        showToast('Тема удалена.');
-        loadTopics();
-    }
+    if (!error) loadTopics();
 }
 
-// FORUM - TOPIC DETAILS & CHAT
+async function toggleTopicStatus(id, currentStatus) {
+    const { error } = await sb.from('topics').update({ is_closed: !currentStatus }).eq('id', id);
+    if (error) showToast('Ошибка обновления статуса', true);
+    else loadTopics();
+}
+
+// === CHAT & COMMENTS ===
+
 async function openTopic(topicId) {
     currentTopicId = topicId;
     const modal = document.getElementById('topicModal');
     const container = document.getElementById('chatContainer');
     const titleEl = document.getElementById('topicModalTitle');
+    const inputArea = document.querySelector('.chat-input-area');
     
     modal.classList.add('active');
-    container.innerHTML = '<div class="loading-state">Загрузка чата...</div>';
+    container.innerHTML = '<div class="loading-state">Загрузка...</div>';
     
-    // 1. Get Topic Details
+    // Загрузка топика
     const { data: topic, error } = await sb.from('topics').select('*, users(*)').eq('id', topicId).single();
-    
     if (error) {
         container.innerHTML = '<div style="color:red">Ошибка загрузки темы</div>';
         return;
@@ -206,72 +207,106 @@ async function openTopic(topicId) {
 
     titleEl.textContent = topic.title;
 
-    // 2. Render OP (Original Post) as first message
-    const opAva = topic.users ? topic.users.avatar_url : 'https://i.postimg.cc/Pf4nb7xV/logo.png';
-    const opName = topic.users ? topic.users.username : 'Автор';
+    // Проверка статуса (Закрыто?)
+    if (topic.is_closed) {
+        inputArea.style.display = 'none';
+        if (!document.getElementById('closedMsg')) {
+            const msg = document.createElement('div');
+            msg.id = 'closedMsg';
+            msg.className = 'chat-closed-msg';
+            msg.innerHTML = '<i class="fas fa-lock"></i> Эта тема закрыта.';
+            inputArea.parentNode.appendChild(msg);
+        } else {
+             document.getElementById('closedMsg').style.display = 'block';
+        }
+    } else {
+        inputArea.style.display = 'flex';
+        const msg = document.getElementById('closedMsg');
+        if (msg) msg.style.display = 'none';
+    }
+
+    // Рендер сообщения автора
+    const opUser = topic.users || {};
+    const opIsAdmin = opUser.role === 'admin';
     const opIsMe = currentUser && topic.author_id === currentUser.id;
     
-    // Reply logic for OP (replying to author)
-    const replyOpBtn = !opIsMe ? `<button class="reply-btn" onclick="replyTo('${opName}')" title="Ответить"><i class="fas fa-reply"></i></button>` : '';
+    let html = renderMessage(
+        opUser.username || 'Автор', 
+        opUser.avatar_url, 
+        topic.description, 
+        topic.created_at, 
+        opIsMe, 
+        true, // isAuthor
+        opIsAdmin
+    );
+    html += '<hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin: 10px 0;">';
 
-    let html = `
-        <div class="msg-row ${opIsMe ? 'mine' : ''}">
-            <img src="${opAva}" class="msg-avatar">
-            <div class="msg-content">
-                <div class="msg-header">
-                    <span class="msg-author">${opName} <i class="fas fa-crown" style="color:#fbbf24; margin-left:4px;" title="Автор темы"></i></span>
-                    <span>${new Date(topic.created_at).toLocaleTimeString().slice(0,5)}</span>
-                    ${replyOpBtn}
-                </div>
-                <div class="msg-bubble" style="border-color: #fbbf24; background: rgba(251, 191, 36, 0.05);">
-                    ${escapeHtml(topic.description)}
-                </div>
-            </div>
-        </div>
-        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin: 10px 0;">
-    `;
-
-    // 3. Get Comments
+    // Загрузка комментариев
     const { data: comments, error: commError } = await sb.from('comments')
         .select('*, users(*)')
         .eq('topic_id', topicId)
         .order('created_at', { ascending: true });
-        
-    if (commError) {
-        if (commError.code === '42P01') {
-             html += '<div style="color:#666; font-size:0.8rem; text-align:center;">Чат недоступен (нет таблицы comments).</div>';
-        }
-    } else if (comments) {
-        html += comments.map(c => {
-            const isMe = currentUser && c.user_id === currentUser.id;
-            const isAuthor = c.user_id === topic.author_id;
-            const userAva = c.users ? c.users.avatar_url : '';
-            const userName = c.users ? c.users.username : 'Unknown';
-            
-            const badge = isAuthor ? '<i class="fas fa-crown author-badge" title="Автор темы"></i>' : '';
-            // Don't show reply button on own messages
-            const replyBtn = !isMe ? `<button class="reply-btn" onclick="replyTo('${userName}')" title="Ответить"><i class="fas fa-reply"></i></button>` : '';
 
-            return `
-            <div class="msg-row ${isMe ? 'mine' : ''}">
-                ${!isMe ? `<img src="${userAva}" class="msg-avatar">` : ''}
-                <div class="msg-content">
-                    <div class="msg-header">
-                        ${isMe ? `<span>${new Date(c.created_at).toLocaleTimeString().slice(0,5)}</span> <span class="msg-author">Вы</span>` 
-                               : `<span class="msg-author">${userName}${badge}</span> <span>${new Date(c.created_at).toLocaleTimeString().slice(0,5)}</span> ${replyBtn}`}
-                    </div>
-                    <div class="msg-bubble">
-                        ${escapeHtml(c.content)}
-                    </div>
-                </div>
-                ${isMe ? `<img src="${userAva}" class="msg-avatar">` : ''}
-            </div>
-            `;
+    if (comments) {
+        html += comments.map(c => {
+            const u = c.users || {};
+            return renderMessage(
+                u.username || 'Unknown',
+                u.avatar_url,
+                c.content,
+                c.created_at,
+                currentUser && c.user_id === currentUser.id,
+                c.user_id === topic.author_id,
+                u.role === 'admin'
+            );
         }).join('');
     }
 
     container.innerHTML = html;
-    container.scrollTop = container.scrollHeight; // Scroll to bottom
+    container.scrollTop = container.scrollHeight;
+}
+
+function renderMessage(name, avatar, text, date, isMe, isTopicAuthor, isAdminUser) {
+    const avatarUrl = avatar || 'https://i.postimg.cc/Pf4nb7xV/logo.png';
+    const time = new Date(date).toLocaleTimeString().slice(0,5);
+    
+    const adminTag = isAdminUser ? '<span class="admin-tag">ADMIN</span>' : '';
+    const authorIcon = isTopicAuthor ? '<i class="fas fa-crown" style="color:#fbbf24; margin-left:4px;" title="Автор темы"></i>' : '';
+    
+    // Кнопка ответа
+    const replyBtn = (!isMe && currentUser) ? `<button class="reply-btn" onclick="replyTo('${name}')" title="Ответить"><i class="fas fa-reply"></i></button>` : '';
+
+    // Парсинг картинок
+    const processedText = parseContent(text);
+
+    return `
+    <div class="msg-row ${isMe ? 'mine' : ''}">
+        ${!isMe ? `<img src="${avatarUrl}" class="msg-avatar">` : ''}
+        <div class="msg-content">
+            <div class="msg-header">
+                ${isMe 
+                    ? `<span>${time}</span> <span class="msg-author">Вы</span> ${adminTag}` 
+                    : `<span class="msg-author">${name}</span> ${adminTag} ${authorIcon} <span>${time}</span> ${replyBtn}`
+                }
+            </div>
+            <div class="msg-bubble" ${isTopicAuthor ? 'style="border-color:#fbbf24; background:rgba(251,191,36,0.05);"' : ''}>
+                ${processedText}
+            </div>
+        </div>
+        ${isMe ? `<img src="${avatarUrl}" class="msg-avatar">` : ''}
+    </div>
+    `;
+}
+
+// Превращает ссылки на картинки в <img>
+function parseContent(text) {
+    const safeText = escapeHtml(text);
+    // Регулярка для поиска URL картинок
+    const imgRegex = /(https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)(?:\?\S*)?)/gi;
+    
+    return safeText.replace(imgRegex, (match) => {
+        return `<img src="${match}" class="chat-image" onclick="window.open('${match}', '_blank')">`;
+    });
 }
 
 function replyTo(username) {
@@ -289,34 +324,35 @@ async function submitComment() {
     const text = input.value.trim();
     if (!text) return;
 
-    // Optimistic UI update (optional, but let's wait for DB for simplicity)
+    // Проверка, не закрыта ли тема (дополнительно на фронте)
+    // В идеале RLS должно блокировать, но проверим тут для UI
+    if (document.getElementById('closedMsg') && document.getElementById('closedMsg').style.display === 'block') {
+        return showToast('Тема закрыта!', true);
+    }
+
     const { error } = await sb.from('comments').insert([{
         topic_id: currentTopicId,
         user_id: currentUser.id,
         content: text
     }]);
 
-    if (error) {
-        if (error.code === '42P01') showToast('Ошибка: Нет таблицы comments (SQL)', true);
-        else showToast('Ошибка: ' + error.message, true);
-    } else {
+    if (error) showToast('Ошибка: ' + error.message, true);
+    else {
         input.value = '';
-        openTopic(currentTopicId); // Reload chat
+        openTopic(currentTopicId);
     }
 }
 
+// === GALLERY ===
 
-// GALLERY
 async function loadGallery() {
     const grid = document.getElementById('galleryGrid');
     if (!grid) return;
 
     const { data, error } = await sb.from('gallery').select('*').order('created_at', { ascending: false });
 
-    if (error) {
-         if (error.code === '42P01') {
-             grid.innerHTML = '<div style="color:red; text-align:center; grid-column:1/-1;">ОШИБКА: Таблицы не созданы.</div>';
-        }
+    if (error && error.code === '42P01') {
+        grid.innerHTML = '<div style="color:red; text-align:center;">ОШИБКА: Таблицы не созданы.</div>';
         return;
     }
 
@@ -326,16 +362,15 @@ async function loadGallery() {
     }
 
     grid.innerHTML = data.map(img => {
-        const isOwner = currentUser && img.author_id === currentUser.id;
+        // ТОЛЬКО АДМИН МОЖЕТ УДАЛЯТЬ
         let deleteBtn = '';
-        
-        if (isAdmin || isOwner) {
+        if (isAdmin) {
             deleteBtn = `<button class="gallery-del-btn" onclick="deletePhoto(${img.id})" title="Удалить">&times;</button>`;
         }
         
         return `
         <div class="gallery-card">
-            <img src="${img.url}" onerror="this.src='https://via.placeholder.com/400?text=Неверная+Ссылка'">
+            <img src="${img.url}" onerror="this.src='https://via.placeholder.com/400?text=Ссылка+битая'">
             ${deleteBtn}
             <div style="position:absolute; bottom:0; left:0; width:100%; padding:10px; background:linear-gradient(to top, rgba(0,0,0,0.8), transparent); color:white; font-size:0.85rem;">
                 ${escapeHtml(img.title)}
@@ -346,16 +381,14 @@ async function loadGallery() {
 }
 
 async function submitPhoto() {
-    if (!currentUser) return showToast('Войдите в аккаунт!', true);
+    if (!isAdmin) return showToast('Только админы могут добавлять фото!', true);
+    
     const url = document.getElementById('photoUrl').value.trim();
     const desc = document.getElementById('photoDesc').value.trim();
-
     if (!url) return showToast('Вставьте ссылку!', true);
 
     const { error } = await sb.from('gallery').insert([{ 
-        url, 
-        title: desc,
-        author_id: currentUser.id 
+        url, title: desc, author_id: currentUser.id 
     }]);
 
     if (error) showToast('Ошибка: ' + error.message, true);
@@ -371,23 +404,20 @@ async function submitPhoto() {
 async function deletePhoto(id) {
     if (!confirm('Удалить фото?')) return;
     const { error } = await sb.from('gallery').delete().eq('id', id);
-    if (error) showToast('Ошибка удаления: ' + error.message, true);
-    else {
-        showToast('Удалено.');
-        loadGallery();
-    }
+    if (!error) loadGallery();
 }
 
-// HELPERS
+// === UTILS ===
+
 function tryOpenModal(id) {
-    if (!currentUser) return showToast('Сначала войдите через Discord!', true);
-    const m = document.getElementById(id);
-    if(m) m.classList.add('active');
+    if (!currentUser) return showToast('Сначала войдите!', true);
+    if (id === 'photoModal' && !isAdmin) return showToast('Доступно только Админам!', true);
+    document.getElementById(id).classList.add('active');
 }
 
 function closeModals() {
     document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
-    currentTopicId = null; // Reset chat focus
+    currentTopicId = null;
 }
 
 function showToast(msg, isError = false) {
@@ -416,38 +446,39 @@ function initStars() {
     const canvas = document.getElementById('star-canvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    let w, h, stars = [];
+    let w = canvas.width = window.innerWidth;
+    let h = canvas.height = window.innerHeight;
     
-    const resize = () => {
+    // Оптимизация: меньше звезд
+    const stars = Array(80).fill().map(() => ({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        size: Math.random() * 1.5,
+        speed: Math.random() * 0.1 + 0.02,
+        alpha: Math.random()
+    }));
+    
+    window.addEventListener('resize', () => {
         w = canvas.width = window.innerWidth;
         h = canvas.height = window.innerHeight;
-        stars = Array(120).fill().map(() => ({
-            x: Math.random() * w,
-            y: Math.random() * h,
-            size: Math.random() * 1.5,
-            speed: Math.random() * 0.15 + 0.05,
-            alpha: Math.random()
-        }));
-    };
-    
-    window.addEventListener('resize', resize);
-    resize();
+    });
     
     const draw = () => {
         ctx.clearRect(0, 0, w, h);
         ctx.fillStyle = 'white';
-        stars.forEach(s => {
+        for (let s of stars) {
             s.y += s.speed;
             if (s.y > h) s.y = 0;
             s.alpha += (Math.random() - 0.5) * 0.05;
-            if (s.alpha < 0.3) s.alpha = 0.3;
-            if (s.alpha > 0.8) s.alpha = 0.8;
+            // Limit alpha
+            if(s.alpha < 0.2) s.alpha = 0.2;
+            if(s.alpha > 0.7) s.alpha = 0.7;
             
             ctx.globalAlpha = s.alpha;
             ctx.beginPath();
             ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
             ctx.fill();
-        });
+        }
         requestAnimationFrame(draw);
     };
     draw();
