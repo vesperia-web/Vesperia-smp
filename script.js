@@ -2,18 +2,23 @@
 const SB_URL = 'https://cullffnjljejufulfhsa.supabase.co';
 const SB_KEY = 'sb_publishable_X8jiwuk5Gro4AemYjIQAuA_TB5-re6I';
 const sb = supabase.createClient(SB_URL, SB_KEY);
+
 let currentUser = null;
+let isAdmin = false;
 
 // INIT
 window.addEventListener('DOMContentLoaded', async () => {
     initStars();
     
+    // Проверка сессии
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
         currentUser = session.user;
+        await syncUserProfile(); 
         updateAuthUI();
     }
 
+    // Роутинг
     const path = window.location.pathname;
     if (path.includes('forum.html')) loadTopics();
     if (path.includes('gallery.html')) loadGallery();
@@ -32,12 +37,42 @@ async function logout() {
     window.location.reload();
 }
 
+// SYNC USER & CHECK ADMIN
+async function syncUserProfile() {
+    if (!currentUser) return;
+    try {
+        // Пытаемся записать пользователя в таблицу public.users
+        const { data, error } = await sb.from('users').upsert({
+            id: currentUser.id,
+            username: currentUser.user_metadata.full_name,
+            avatar_url: currentUser.user_metadata.avatar_url
+        }).select('role').single();
+
+        if (error) {
+            console.error('Ошибка БД (Sync):', error);
+            if (error.code === '42P01') {
+                showToast('ОШИБКА: Таблицы не созданы в Supabase!', true);
+            }
+            return;
+        }
+
+        if (data && data.role === 'admin') {
+            isAdmin = true;
+        }
+    } catch (e) {
+        console.error('Critical Sync Error:', e);
+    }
+}
+
 function updateAuthUI() {
     const container = document.getElementById('authContainer');
     if (currentUser && container) {
         const meta = currentUser.user_metadata;
+        const adminBadge = isAdmin ? '<span style="background:#ef4444; color:white; font-size:0.6rem; padding:2px 6px; border-radius:4px; margin-right:5px;">ADMIN</span>' : '';
+
         container.innerHTML = `
             <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.08); padding:5px 15px; border-radius:50px; border:1px solid rgba(255,255,255,0.1);">
+                ${adminBadge}
                 <img src="${meta.avatar_url}" style="width:26px; height:26px; border-radius:50%;">
                 <span style="font-size:0.85rem; font-weight:700;">${meta.full_name.split('#')[0]}</span>
                 <button onclick="logout()" style="background:none; border:none; color:#ef4444; cursor:pointer; opacity:0.8;"><i class="fas fa-sign-out-alt"></i></button>
@@ -49,7 +84,7 @@ function updateAuthUI() {
     }
 }
 
-// FORUM: FIX FK CONSTRAINT ERROR
+// FORUM
 async function submitPost() {
     if (!currentUser) return showToast('Сначала войдите в аккаунт!', true);
     
@@ -58,34 +93,19 @@ async function submitPost() {
 
     if (!title || !content) return showToast('Заполните все поля!', true);
 
-    // FIX: Пытаемся синхронизировать юзера, если его нет в публичной таблице
-    // Таблица обычно называется 'users' или 'profiles'. Попробуем 'users'.
-    // Если таблицы нет, этот шаг упадет тихо, и мы попробуем создать тему.
-    try {
-        const { error: userError } = await sb.from('users').upsert({
-            id: currentUser.id,
-            username: currentUser.user_metadata.full_name,
-            avatar_url: currentUser.user_metadata.avatar_url
-        });
-    } catch (e) {
-        console.log('Skipping user sync (table might not exist)');
-    }
-
     const { error } = await sb.from('topics').insert([{
         title: title, 
-        description: content, // Предполагаем поле description для текста
+        description: content,
         author_id: currentUser.id
     }]);
 
     if (error) {
-        // Улучшенное сообщение об ошибке
-        if (error.code === '23503') { // Foreign Key Violation
-            showToast('Ошибка: Ваш профиль не найден в базе данных сервера. Сообщите администратору.', true);
-        } else {
-            showToast('Ошибка базы: ' + error.message, true);
-        }
+        console.error('Post Error:', error);
+        if (error.code === '42P01') showToast('Ошибка: Нет таблицы topics!', true);
+        else if (error.code === '42703') showToast('Ошибка: Неверные колонки в БД!', true);
+        else showToast('Ошибка: ' + error.message, true);
     } else {
-        showToast('Тема создана успешно!');
+        showToast('Тема создана!');
         closeModals();
         loadTopics();
         document.getElementById('postTitle').value = '';
@@ -97,24 +117,59 @@ async function loadTopics() {
     const grid = document.getElementById('postsGrid');
     if (!grid) return;
     
-    const { data, error } = await sb.from('topics').select('*').order('created_at', { ascending: false });
+    const { data, error } = await sb.from('topics').select('*, users(username, avatar_url)').order('created_at', { ascending: false });
 
-    if (error || !data || data.length === 0) {
-        grid.innerHTML = '<div style="text-align:center; padding:40px; color:#555;">Тем пока нет. Станьте первым!</div>';
+    if (error) {
+        console.error('Load Topics Error:', error);
+        if (error.code === '42P01') {
+             grid.innerHTML = '<div style="color:red; text-align:center;">ОШИБКА: Таблицы не созданы. Выполните SQL код в Supabase.</div>';
+        }
         return;
     }
 
-    grid.innerHTML = data.map(topic => `
+    if (!data || data.length === 0) {
+        grid.innerHTML = '<div style="text-align:center; padding:40px; color:#555;">Тем пока нет.</div>';
+        return;
+    }
+
+    grid.innerHTML = data.map(topic => {
+        const isOwner = currentUser && topic.author_id === currentUser.id;
+        let deleteBtn = '';
+        if (isAdmin || isOwner) {
+            deleteBtn = `<button class="post-del-btn" onclick="deleteTopic(${topic.id})" title="Удалить тему"><i class="fas fa-trash"></i></button>`;
+        }
+
+        // Пытаемся получить имя автора из JOIN (если таблица users настроена верно), иначе 'Unknown'
+        const authorName = topic.users ? topic.users.username : 'Игрок';
+        const authorAva = topic.users ? topic.users.avatar_url : 'https://i.postimg.cc/Pf4nb7xV/logo.png';
+
+        return `
         <div class="post-entry">
             <div class="post-header">
-                <span class="post-title">${escapeHtml(topic.title)}</span>
-                <span class="post-meta">${new Date(topic.created_at).toLocaleDateString()}</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <img src="${authorAva}" style="width:30px; height:30px; border-radius:50%;">
+                    <div style="display:flex; flex-direction:column;">
+                        <span class="post-title">${escapeHtml(topic.title)}</span>
+                        <span class="post-meta" style="font-size:0.75rem;">${authorName} • ${new Date(topic.created_at).toLocaleDateString()}</span>
+                    </div>
+                </div>
+                ${deleteBtn}
             </div>
             <div class="post-body">
-               ${topic.description ? escapeHtml(topic.description) : 'Нет содержания...'}
+               ${topic.description ? escapeHtml(topic.description) : ''}
             </div>
         </div>
-    `).join('');
+    `}).join('');
+}
+
+async function deleteTopic(id) {
+    if (!confirm('Удалить эту тему?')) return;
+    const { error } = await sb.from('topics').delete().eq('id', id);
+    if (error) showToast('Ошибка: ' + error.message, true);
+    else {
+        showToast('Тема удалена.');
+        loadTopics();
+    }
 }
 
 // GALLERY
@@ -124,21 +179,33 @@ async function loadGallery() {
 
     const { data, error } = await sb.from('gallery').select('*').order('created_at', { ascending: false });
 
-    if (error || !data || data.length === 0) {
-        grid.innerHTML = '<div style="text-align:center; padding:40px; color:#555;">Галерея пуста.</div>';
+    if (error) {
+         if (error.code === '42P01') {
+             grid.innerHTML = '<div style="color:red; text-align:center; grid-column:1/-1;">ОШИБКА: Таблицы не созданы.</div>';
+        }
+        return;
+    }
+
+    if (!data || data.length === 0) {
+        grid.innerHTML = '<div style="text-align:center; padding:40px; color:#555; grid-column:1/-1;">Галерея пуста.</div>';
         return;
     }
 
     grid.innerHTML = data.map(img => {
+        const isOwner = currentUser && img.author_id === currentUser.id;
         let deleteBtn = '';
-        if (currentUser && img.author_id === currentUser.id) {
+        
+        if (isAdmin || isOwner) {
             deleteBtn = `<button class="gallery-del-btn" onclick="deletePhoto(${img.id})" title="Удалить">&times;</button>`;
         }
         
         return `
         <div class="gallery-card">
-            <img src="${img.url}" onerror="this.src='https://via.placeholder.com/400?text=Error'">
+            <img src="${img.url}" onerror="this.src='https://via.placeholder.com/400?text=Неверная+Ссылка'">
             ${deleteBtn}
+            <div style="position:absolute; bottom:0; left:0; width:100%; padding:10px; background:linear-gradient(to top, rgba(0,0,0,0.8), transparent); color:white; font-size:0.85rem;">
+                ${escapeHtml(img.title)}
+            </div>
         </div>
         `;
     }).join('');
@@ -163,6 +230,7 @@ async function submitPhoto() {
         closeModals();
         loadGallery();
         document.getElementById('photoUrl').value = '';
+        document.getElementById('photoDesc').value = '';
     }
 }
 
