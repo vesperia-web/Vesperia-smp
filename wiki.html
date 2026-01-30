@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vesperia SMP | Вики</title>
+    <link rel="icon" href="https://i.postimg.cc/Pf4nb7xV/logo.png">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="page-wiki">
+    <canvas id="star-canvas"></canvas>
+    <div class="glow-bg"></div>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-brand">
+                <img src="https://i.postimg.cc/Pf4nb7xV/logo.png" alt="Logo">
+                <span>VESPERIA</span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html" class="nav-item">Главная</a>
+                <a href="forum.html" class="nav-item">Форум</a>
+                <a href="wiki.html" class="nav-item active">Вики</a>
+                <a href="rules.html" class="nav-item">Правила</a>
+                <a href="gallery.html" class="nav-item">Галерея</a>
+            </div>
+            <div class="nav-actions">
+                <div id="authContainer">
+                    <button class="btn btn-discord" onclick="login()"><i class="fab fa-discord"></i> Войти</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content-container">
+        <div class="panel">
+            <div class="panel-header">
+                <h2><i class="fas fa-book"></i> База знаний</h2>
+            </div>
+            <div class="panel-body wiki-grid">
+                <div class="wiki-card">
+                    <h3><i class="fas fa-play"></i> Как начать играть?</h3>
+                    <p>Для входа на сервер вам нужно подать заявку в Discord и прописать IP. Первым делом найдите свободное место и поставьте приват.</p>
+                </div>
+                <div class="wiki-card">
+                    <h3><i class="fas fa-coins"></i> Экономика</h3>
+                    <p>Основная валюта — алмазы. Вы можете обменивать их на товары в торговом хабе или переводить другим игрокам через команду /pay.</p>
+                </div>
+                <div class="wiki-card">
+                    <h3><i class="fas fa-hat-wizard"></i> Система магии</h3>
+                    <p>На сервере нет креатива. Все заклинания изучаются через древние манускрипты, которые можно найти в данжах.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script src="script.js"></script>
+</body>
+</html>
