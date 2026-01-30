@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vesperia | Путь Новичка</title>
+    <link rel="icon" href="https://i.postimg.cc/Pf4nb7xV/logo.png">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="page-wiki">
+    <canvas id="star-canvas"></canvas>
+    <div class="glow-bg"></div>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-brand">
+                <img src="https://i.postimg.cc/Pf4nb7xV/logo.png" alt="Logo">
+                <span>VESPERIA</span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html" class="nav-item">Главная</a>
+                <a href="forum.html" class="nav-item">Форум</a>
+                <a href="wiki.html" class="nav-item active">Вики</a>
+            </div>
+            <div class="nav-actions">
+                <div id="authContainer">
+                    <button class="btn btn-discord" onclick="login()"><i class="fab fa-discord"></i> Войти</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content-container">
+        <div class="hero">
+            <h1 class="hero-title">Путь <span class="accent">Новичка</span></h1>
+            <p class="hero-subtitle">Как начать играть на Vesperia SMP</p>
+        </div>
+
+        <div class="rules-list">
+            <div class="guide-card">
+                <h2><i class="fas fa-video"></i> 1. Видео-заявка</h2>
+                <p class="wiki-desc">Сервер приватный (Whitelist). Зайди в наш Discord и отправь <strong>видео-заявку</strong>. Расскажи о себе и планах на игру. После одобрения администрацией ты попадешь в белый список.</p>
+            </div>
+
+            <div class="guide-card">
+                <h2><i class="fas fa-link"></i> 2. Вход и Привязка</h2>
+                <p class="wiki-desc">IP сервера: <code>play.vesperiasmp.ru</code><br>При первом входе вас кикнет и выдаст код. Напишите <code>/link код</code> нашему боту в Discord, чтобы привязать аккаунт.</p>
+            </div>
+
+            <div class="guide-card">
+                <h2><i class="fas fa-download"></i> 3. Установка модов</h2>
+                <p class="wiki-desc">Версия: <strong>1.21.11</strong> (Fabric).<br>Обязательно установите <strong>SimpleVoiceChat</strong> (голосовой чат) и <strong>Emotecraft</strong> (эмоции), иначе вас не пустит на сервер.</p>
+            </div>
+
+            <div class="guide-card">
+                <h2><i class="fas fa-map-signs"></i> 4. Выживание</h2>
+                <p class="wiki-desc"><strong>НЕТ RTP</strong>. Мы ценим ванильное выживание. Используйте Незер-магистрали или элитры для перемещения. Приватов нет, стройте свои базы далеко от спавна.</p>
+            </div>
+        </div>
+
+        <center><a href="wiki.html" class="back-btn">← Вернуться в Вики</a></center>
+    </main>
+
+    <footer><p>&copy; 2026 Vesperia SMP.</p></footer>
+    <script src="script.js"></script>
+</body>
+</html>
