@@ -8,14 +8,12 @@ let currentUser = null;
 window.addEventListener('DOMContentLoaded', async () => {
     initStars();
     
-    // Check Auth
     const { data: { session } } = await sb.auth.getSession();
     if (session) {
         currentUser = session.user;
         updateAuthUI();
     }
 
-    // Determine Page
     const path = window.location.pathname;
     if (path.includes('forum.html')) loadPosts();
     if (path.includes('gallery.html')) loadGallery();
@@ -39,62 +37,38 @@ function updateAuthUI() {
     if (currentUser && container) {
         const meta = currentUser.user_metadata;
         container.innerHTML = `
-            <div style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.06); padding:6px 16px; border-radius:50px; border:1px solid var(--border);">
-                <img src="${meta.avatar_url}" style="width:24px; height:24px; border-radius:50%; border:1px solid var(--accent);">
+            <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.05); padding:5px 15px; border-radius:50px; border:1px solid var(--border);">
+                <img src="${meta.avatar_url}" style="width:26px; height:26px; border-radius:50%; border:1px solid var(--accent);">
                 <span style="font-size:0.85rem; font-weight:700;">${meta.full_name.split('#')[0]}</span>
-                <button onclick="logout()" style="background:none; border:none; color:var(--red); cursor:pointer; opacity:0.7; transition:0.2s;"><i class="fas fa-sign-out-alt"></i></button>
+                <button onclick="logout()" style="background:none; border:none; color:var(--red); cursor:pointer; opacity:0.8;"><i class="fas fa-sign-out-alt"></i></button>
             </div>
         `;
         
-        // Show restricted buttons
+        // Показываем кнопки "Создать тему/фото" только авторизованным
         document.querySelectorAll('.auth-only').forEach(btn => {
             btn.style.setProperty('display', 'inline-flex', 'important');
         });
     }
 }
 
-// FORUM
-async function loadPosts() {
-    const grid = document.getElementById('postsGrid');
-    if (!grid) return;
-    
-    const { data, error } = await sb.from('posts').select('*').order('created_at', { ascending: false });
-
-    if (error || !data || data.length === 0) {
-        grid.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">Тишина... Будьте первым!</div>';
-        return;
-    }
-
-    grid.innerHTML = data.map(post => `
-        <div class="post-entry">
-            <img src="${post.avatar_url || 'https://via.placeholder.com/50'}" class="pa-avatar">
-            <div class="pa-info">
-                <h4>${escapeHtml(post.title)}</h4>
-                <p>${escapeHtml(post.content)}</p>
-                <span class="pa-meta">@${escapeHtml(post.author_name)} • ${new Date(post.created_at).toLocaleDateString()}</span>
-            </div>
-        </div>
-    `).join('');
-}
-
+// FORUM FIX: Не отправляем avatar_url и author_name в базу, если их там нет
 async function submitPost() {
     if (!currentUser) return showToast('Сначала войдите в аккаунт!', true);
     
     const title = document.getElementById('postTitle').value.trim();
     const content = document.getElementById('postContent').value.trim();
 
-    if (!title || !content) return showToast('Заполните заголовок и сообщение!', true);
+    if (!title || !content) return showToast('Заполните все поля!', true);
 
+    // FIX: Отправляем только то, что есть в стандартной таблице posts
     const { error } = await sb.from('posts').insert([{
-        title, content,
-        author_id: currentUser.id,
-        author_name: currentUser.user_metadata.full_name,
-        avatar_url: currentUser.user_metadata.avatar_url
+        title: title, 
+        content: content,
+        author_id: currentUser.id
     }]);
 
     if (error) {
-        if (error.code === '42501') showToast('Вам запрещено публиковать (Muted).', true);
-        else showToast('Ошибка сервера: ' + error.message, true);
+        showToast('Ошибка сервера: ' + error.message, true);
     } else {
         showToast('Тема опубликована!');
         closeModals();
@@ -102,6 +76,31 @@ async function submitPost() {
         document.getElementById('postTitle').value = '';
         document.getElementById('postContent').value = '';
     }
+}
+
+async function loadPosts() {
+    const grid = document.getElementById('postsGrid');
+    if (!grid) return;
+    
+    const { data, error } = await sb.from('posts').select('*').order('created_at', { ascending: false });
+
+    if (error || !data || data.length === 0) {
+        grid.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">Тишина... Станьте первым!</div>';
+        return;
+    }
+
+    grid.innerHTML = data.map(post => `
+        <div class="post-entry">
+            <div style="background:#222; width:45px; height:45px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#555; border:1px solid #333;">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="pa-info">
+                <h4>${escapeHtml(post.title)}</h4>
+                <p>${escapeHtml(post.content)}</p>
+                <span class="pa-meta">ID Автора: ${post.author_id.slice(0, 8)}... • ${new Date(post.created_at).toLocaleDateString()}</span>
+            </div>
+        </div>
+    `).join('');
 }
 
 // GALLERY
@@ -112,13 +111,13 @@ async function loadGallery() {
     const { data, error } = await sb.from('gallery').select('*').order('created_at', { ascending: false });
 
     if (error || !data || data.length === 0) {
-        grid.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">Скриншотов пока нет. Загрузи свой!</div>';
+        grid.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">Галерея пуста.</div>';
         return;
     }
 
     grid.innerHTML = data.map(img => `
         <div class="gallery-card">
-            <img src="${img.url}" onerror="this.src='https://via.placeholder.com/400?text=Broken+Link'">
+            <img src="${img.url}" onerror="this.src='https://via.placeholder.com/400?text=Error'">
             <div class="gallery-overlay">${escapeHtml(img.title || 'Vesperia SMP')}</div>
         </div>
     `).join('');
@@ -129,7 +128,7 @@ async function submitPhoto() {
     const url = document.getElementById('photoUrl').value.trim();
     const desc = document.getElementById('photoDesc').value.trim();
 
-    if (!url) return showToast('Вставьте прямую ссылку на фото!', true);
+    if (!url) return showToast('Вставьте ссылку!', true);
 
     const { error } = await sb.from('gallery').insert([{ 
         url, 
@@ -139,19 +138,18 @@ async function submitPhoto() {
 
     if (error) showToast('Ошибка: ' + error.message, true);
     else {
-        showToast('Скриншот добавлен!');
+        showToast('Фото добавлено!');
         closeModals();
         loadGallery();
         document.getElementById('photoUrl').value = '';
-        document.getElementById('photoDesc').value = '';
     }
 }
 
-// UTILS
+// UI HELPERS
 function tryOpenModal(id) {
-    if (!currentUser) return showToast('Сначала авторизуйтесь через Discord!', true);
-    const modal = document.getElementById(id);
-    if(modal) modal.classList.add('active');
+    if (!currentUser) return showToast('Сначала войдите через Discord!', true);
+    const m = document.getElementById(id);
+    if(m) m.classList.add('active');
 }
 
 function closeModals() {
@@ -168,7 +166,7 @@ function showToast(msg, isError = false) {
 
 function copyIp() {
     navigator.clipboard.writeText('play.vesperiasmp.ru');
-    showToast('IP скопирован! Ждем на сервере.');
+    showToast('IP скопирован!');
 }
 
 function escapeHtml(text) {
@@ -180,6 +178,7 @@ window.onclick = (e) => {
     if (e.target.classList.contains('modal-overlay')) closeModals();
 }
 
+// WARP STARS EFFECT
 function initStars() {
     const canvas = document.getElementById('star-canvas');
     if (!canvas) return;
@@ -189,12 +188,11 @@ function initStars() {
     const resize = () => {
         w = canvas.width = window.innerWidth;
         h = canvas.height = window.innerHeight;
-        // Create falling stars
-        stars = Array(150).fill().map(() => ({ 
-            x: Math.random() * w, 
-            y: Math.random() * h, 
-            z: Math.random() * 1.5 + 0.5, // Depth/Speed factor
-            size: Math.random() * 1.5
+        // Warp effect: stars move from center
+        stars = Array(200).fill().map(() => ({
+            x: Math.random() * w - w/2,
+            y: Math.random() * h - h/2,
+            z: Math.random() * 2000 // depth
         }));
     };
     
@@ -202,26 +200,34 @@ function initStars() {
     resize();
     
     const draw = () => {
-        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#020203'; // trail effect
+        ctx.fillRect(0, 0, w, h);
+        
+        const cx = w / 2;
+        const cy = h / 2;
+        
         ctx.fillStyle = 'white';
         
         stars.forEach(s => {
-            // Move down based on depth (z)
-            s.y += s.z * 0.5; 
-            
-            // Reset if out of screen
-            if (s.y > h) {
-                s.y = 0;
-                s.x = Math.random() * w;
+            s.z -= 10; // speed
+            if (s.z <= 0) {
+                s.z = 2000;
+                s.x = Math.random() * w - cx;
+                s.y = Math.random() * h - cy;
             }
             
-            // Draw star with opacity based on depth
-            ctx.globalAlpha = (s.z - 0.5) / 1.5; 
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-            ctx.fill();
+            const k = 128.0 / s.z;
+            const px = s.x * k + cx;
+            const py = s.y * k + cy;
+            
+            if (px >= 0 && px <= w && py >= 0 && py <= h) {
+                const size = (1 - s.z / 2000) * 2.5;
+                ctx.globalAlpha = (1 - s.z / 2000);
+                ctx.beginPath();
+                ctx.arc(px, py, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
         });
-        
         requestAnimationFrame(draw);
     };
     draw();
