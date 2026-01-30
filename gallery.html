@@ -38,11 +38,11 @@
     <main class="content-container">
         <div class="panel">
             <div class="panel-header">
-                <h2><i class="fas fa-images"></i> Скриншоты игроков</h2>
-                <button class="btn btn-accent" onclick="tryOpenModal('photoModal')">Добавить фото</button>
+                <h2><i class="fas fa-camera-retro"></i> Жизнь Сервера</h2>
+                <button class="btn btn-accent auth-only" onclick="tryOpenModal('photoModal')">Добавить фото</button>
             </div>
             <div class="panel-body gallery-container" id="galleryGrid">
-                <div class="loading-state">Загружаем галерею...</div>
+                <div class="loading-state">Загружаем снимки...</div>
             </div>
         </div>
     </main>
@@ -50,19 +50,19 @@
     <div id="photoModal" class="modal-overlay">
         <div class="modal-card">
             <div class="modal-head">
-                <h3>Загрузить фото</h3>
+                <h3>Загрузить момент</h3>
                 <button class="close-btn" onclick="closeModals()">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>Ссылка на картинку (Imgur и др.)</label>
-                    <input type="text" id="photoUrl" placeholder="https://i.imgur.com/...">
+                    <label>Ссылка (Imgur / Discord CDN)</label>
+                    <input type="text" id="photoUrl" placeholder="https://...">
                 </div>
                 <div class="form-group">
                     <label>Описание</label>
-                    <input type="text" id="photoDesc" placeholder="Что здесь происходит?">
+                    <input type="text" id="photoDesc" placeholder="Что происходит на фото?">
                 </div>
-                <button class="btn btn-primary full-width" onclick="submitPhoto()">Добавить</button>
+                <button class="btn btn-primary full-width" onclick="submitPhoto()">Опубликовать</button>
             </div>
         </div>
     </div>
