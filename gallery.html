@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vesperia SMP | Галерея</title>
+    <link rel="icon" href="https://i.postimg.cc/Pf4nb7xV/logo.png">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="page-gallery">
+    <canvas id="star-canvas"></canvas>
+    <div class="glow-bg"></div>
+
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a href="index.html" class="nav-brand">
+                <img src="https://i.postimg.cc/Pf4nb7xV/logo.png" alt="Logo">
+                <span>VESPERIA</span>
+            </a>
+            <div class="nav-links">
+                <a href="index.html" class="nav-item">Главная</a>
+                <a href="forum.html" class="nav-item">Форум</a>
+                <a href="wiki.html" class="nav-item">Вики</a>
+                <a href="rules.html" class="nav-item">Правила</a>
+                <a href="gallery.html" class="nav-item active">Галерея</a>
+            </div>
+            <div class="nav-actions">
+                <div id="authContainer">
+                    <button class="btn btn-discord" onclick="login()"><i class="fab fa-discord"></i> Войти</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content-container">
+        <div class="panel">
+            <div class="panel-header">
+                <h2><i class="fas fa-images"></i> Скриншоты игроков</h2>
+                <button class="btn btn-accent" onclick="tryOpenModal('photoModal')">Добавить фото</button>
+            </div>
+            <div class="panel-body gallery-container" id="galleryGrid">
+                <div class="loading-state">Загружаем галерею...</div>
+            </div>
+        </div>
+    </main>
+
+    <div id="photoModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-head">
+                <h3>Загрузить фото</h3>
+                <button class="close-btn" onclick="closeModals()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Ссылка на картинку (Imgur и др.)</label>
+                    <input type="text" id="photoUrl" placeholder="https://i.imgur.com/...">
+                </div>
+                <div class="form-group">
+                    <label>Описание</label>
+                    <input type="text" id="photoDesc" placeholder="Что здесь происходит?">
+                </div>
+                <button class="btn btn-primary full-width" onclick="submitPhoto()">Добавить</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast-box"></div>
+    <script src="script.js"></script>
+</body>
+</html>
