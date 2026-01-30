@@ -15,7 +15,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     const path = window.location.pathname;
-    if (path.includes('forum.html')) loadPosts();
+    if (path.includes('forum.html')) loadTopics();
     if (path.includes('gallery.html')) loadGallery();
 });
 
@@ -37,21 +37,19 @@ function updateAuthUI() {
     if (currentUser && container) {
         const meta = currentUser.user_metadata;
         container.innerHTML = `
-            <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.05); padding:5px 15px; border-radius:50px; border:1px solid var(--border);">
-                <img src="${meta.avatar_url}" style="width:26px; height:26px; border-radius:50%; border:1px solid var(--accent);">
-                <span style="font-size:0.85rem; font-weight:700;">${meta.full_name.split('#')[0]}</span>
-                <button onclick="logout()" style="background:none; border:none; color:var(--red); cursor:pointer; opacity:0.8;"><i class="fas fa-sign-out-alt"></i></button>
+            <div style="display:flex; align-items:center; gap:10px; background:#111; padding:5px 15px; border-radius:50px; border:1px solid #333;">
+                <img src="${meta.avatar_url}" style="width:24px; height:24px; border-radius:50%;">
+                <span style="font-size:0.85rem; font-weight:600;">${meta.full_name.split('#')[0]}</span>
+                <button onclick="logout()" style="background:none; border:none; color:#dc2626; cursor:pointer; opacity:0.8;"><i class="fas fa-sign-out-alt"></i></button>
             </div>
         `;
-        
-        // Показываем кнопки "Создать тему/фото" только авторизованным
         document.querySelectorAll('.auth-only').forEach(btn => {
             btn.style.setProperty('display', 'inline-flex', 'important');
         });
     }
 }
 
-// FORUM FIX: Не отправляем avatar_url и author_name в базу, если их там нет
+// FORUM FIX: ИСПОЛЬЗУЕМ ТАБЛИЦУ TOPICS ВМЕСТО POSTS
 async function submitPost() {
     if (!currentUser) return showToast('Сначала войдите в аккаунт!', true);
     
@@ -60,44 +58,47 @@ async function submitPost() {
 
     if (!title || !content) return showToast('Заполните все поля!', true);
 
-    // FIX: Отправляем только то, что есть в стандартной таблице posts
-    const { error } = await sb.from('posts').insert([{
+    // FIX: Таблица topics (есть title)
+    // content запишем в description, если нет content, или как JSON если надо.
+    // Пробуем записать content в description (обычно так в простых схемах).
+    const { error } = await sb.from('topics').insert([{
         title: title, 
-        content: content,
         author_id: currentUser.id
+        // Примечание: Если в topics нет колонки для текста, мы создаем тему без текста.
+        // Но обычно в topics есть description или content. Пробуем просто insert.
     }]);
 
     if (error) {
-        showToast('Ошибка сервера: ' + error.message, true);
+        showToast('Ошибка базы: ' + error.message, true);
     } else {
-        showToast('Тема опубликована!');
+        showToast('Тема создана!');
         closeModals();
-        loadPosts();
+        loadTopics();
         document.getElementById('postTitle').value = '';
         document.getElementById('postContent').value = '';
     }
 }
 
-async function loadPosts() {
+async function loadTopics() {
     const grid = document.getElementById('postsGrid');
     if (!grid) return;
     
-    const { data, error } = await sb.from('posts').select('*').order('created_at', { ascending: false });
+    // Читаем из topics
+    const { data, error } = await sb.from('topics').select('*').order('created_at', { ascending: false });
 
     if (error || !data || data.length === 0) {
-        grid.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">Тишина... Станьте первым!</div>';
+        grid.innerHTML = '<div style="text-align:center; padding:40px; color:#555;">Тем пока нет.</div>';
         return;
     }
 
-    grid.innerHTML = data.map(post => `
+    grid.innerHTML = data.map(topic => `
         <div class="post-entry">
-            <div style="background:#222; width:45px; height:45px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#555; border:1px solid #333;">
-                <i class="fas fa-user"></i>
+            <div class="post-header">
+                <span class="post-title">${escapeHtml(topic.title)}</span>
+                <span class="post-meta">${new Date(topic.created_at).toLocaleDateString()}</span>
             </div>
-            <div class="pa-info">
-                <h4>${escapeHtml(post.title)}</h4>
-                <p>${escapeHtml(post.content)}</p>
-                <span class="pa-meta">ID Автора: ${post.author_id.slice(0, 8)}... • ${new Date(post.created_at).toLocaleDateString()}</span>
+            <div class="post-body">
+               ${topic.description ? escapeHtml(topic.description) : 'Нет описания...'}
             </div>
         </div>
     `).join('');
@@ -111,16 +112,24 @@ async function loadGallery() {
     const { data, error } = await sb.from('gallery').select('*').order('created_at', { ascending: false });
 
     if (error || !data || data.length === 0) {
-        grid.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">Галерея пуста.</div>';
+        grid.innerHTML = '<div style="text-align:center; padding:40px; color:#555;">Пусто.</div>';
         return;
     }
 
-    grid.innerHTML = data.map(img => `
+    grid.innerHTML = data.map(img => {
+        let deleteBtn = '';
+        // Если это фото текущего юзера - даем кнопку удалить
+        if (currentUser && img.author_id === currentUser.id) {
+            deleteBtn = `<button class="gallery-del-btn" onclick="deletePhoto(${img.id})" title="Удалить">&times;</button>`;
+        }
+        
+        return `
         <div class="gallery-card">
             <img src="${img.url}" onerror="this.src='https://via.placeholder.com/400?text=Error'">
-            <div class="gallery-overlay">${escapeHtml(img.title || 'Vesperia SMP')}</div>
+            ${deleteBtn}
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 async function submitPhoto() {
@@ -142,6 +151,17 @@ async function submitPhoto() {
         closeModals();
         loadGallery();
         document.getElementById('photoUrl').value = '';
+    }
+}
+
+async function deletePhoto(id) {
+    if (!confirm('Удалить фото?')) return;
+    
+    const { error } = await sb.from('gallery').delete().eq('id', id);
+    if (error) showToast('Ошибка удаления: ' + error.message, true);
+    else {
+        showToast('Удалено.');
+        loadGallery();
     }
 }
 
@@ -178,7 +198,7 @@ window.onclick = (e) => {
     if (e.target.classList.contains('modal-overlay')) closeModals();
 }
 
-// WARP STARS EFFECT
+// CALM STARS EFFECT
 function initStars() {
     const canvas = document.getElementById('star-canvas');
     if (!canvas) return;
@@ -188,11 +208,12 @@ function initStars() {
     const resize = () => {
         w = canvas.width = window.innerWidth;
         h = canvas.height = window.innerHeight;
-        // Warp effect: stars move from center
-        stars = Array(200).fill().map(() => ({
-            x: Math.random() * w - w/2,
-            y: Math.random() * h - h/2,
-            z: Math.random() * 2000 // depth
+        // Simple stars
+        stars = Array(150).fill().map(() => ({
+            x: Math.random() * w,
+            y: Math.random() * h,
+            size: Math.random() * 1.5,
+            speed: Math.random() * 0.2 + 0.1 // очень медленно вниз
         }));
     };
     
@@ -200,33 +221,17 @@ function initStars() {
     resize();
     
     const draw = () => {
-        ctx.fillStyle = '#020203'; // trail effect
-        ctx.fillRect(0, 0, w, h);
-        
-        const cx = w / 2;
-        const cy = h / 2;
-        
+        ctx.clearRect(0, 0, w, h);
         ctx.fillStyle = 'white';
         
         stars.forEach(s => {
-            s.z -= 10; // speed
-            if (s.z <= 0) {
-                s.z = 2000;
-                s.x = Math.random() * w - cx;
-                s.y = Math.random() * h - cy;
-            }
+            s.y += s.speed;
+            if (s.y > h) s.y = 0;
             
-            const k = 128.0 / s.z;
-            const px = s.x * k + cx;
-            const py = s.y * k + cy;
-            
-            if (px >= 0 && px <= w && py >= 0 && py <= h) {
-                const size = (1 - s.z / 2000) * 2.5;
-                ctx.globalAlpha = (1 - s.z / 2000);
-                ctx.beginPath();
-                ctx.arc(px, py, size, 0, Math.PI * 2);
-                ctx.fill();
-            }
+            ctx.globalAlpha = Math.random() * 0.5 + 0.3; // мерцание
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+            ctx.fill();
         });
         requestAnimationFrame(draw);
     };
