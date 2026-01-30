@@ -115,15 +115,18 @@ async function loadTopics() {
         
         // ADMIN & OWNER: Закрыть/Открыть
         if (isAdmin || isOwner) {
-            const lockIcon = topic.is_closed ? 'fa-lock-open' : 'fa-lock';
-            const lockTitle = topic.is_closed ? 'Открыть тему' : 'Закрыть тему';
-            actions += `<button class="post-btn lock" onclick="event.stopPropagation(); toggleTopicStatus(${topic.id}, ${topic.is_closed})" title="${lockTitle}"><i class="fas ${lockIcon}"></i></button>`;
+            const isClosed = topic.is_closed === true; // Handle nulls safely
+            const lockIcon = isClosed ? 'fa-lock-open' : 'fa-lock';
+            const lockTitle = isClosed ? 'Открыть тему' : 'Закрыть тему';
+            // Explicitly pass boolean
+            actions += `<button class="post-btn lock" onclick="event.stopPropagation(); toggleTopicStatus(${topic.id}, ${isClosed})" title="${lockTitle}"><i class="fas ${lockIcon}"></i></button>`;
         }
 
         const authorName = topic.users ? topic.users.username : 'Игрок';
         const authorAva = topic.users ? topic.users.avatar_url : 'https://i.postimg.cc/Pf4nb7xV/logo.png';
-        const closedClass = topic.is_closed ? 'closed' : '';
-        const closedLabel = topic.is_closed ? '<span class="closed-icon"><i class="fas fa-lock"></i> Закрыто</span>' : '';
+        const isClosed = topic.is_closed === true;
+        const closedClass = isClosed ? 'closed' : '';
+        const closedLabel = isClosed ? '<span class="closed-icon"><i class="fas fa-lock"></i> Закрыто</span>' : '';
 
         // Обрезка текста
         let shortDesc = topic.description || '';
@@ -181,8 +184,12 @@ async function deleteTopic(id) {
 }
 
 async function toggleTopicStatus(id, currentStatus) {
+    // ВАЖНО: Выполните SQL команду для разрешения UPDATE
     const { error } = await sb.from('topics').update({ is_closed: !currentStatus }).eq('id', id);
-    if (error) showToast('Ошибка обновления статуса', true);
+    if (error) {
+        console.error(error);
+        showToast('Ошибка! Выполни SQL для прав доступа.', true);
+    }
     else loadTopics();
 }
 
