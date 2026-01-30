@@ -37,10 +37,10 @@ function updateAuthUI() {
     if (currentUser && container) {
         const meta = currentUser.user_metadata;
         container.innerHTML = `
-            <div style="display:flex; align-items:center; gap:10px; background:#111; padding:5px 15px; border-radius:50px; border:1px solid #333;">
-                <img src="${meta.avatar_url}" style="width:24px; height:24px; border-radius:50%;">
-                <span style="font-size:0.85rem; font-weight:600;">${meta.full_name.split('#')[0]}</span>
-                <button onclick="logout()" style="background:none; border:none; color:#dc2626; cursor:pointer; opacity:0.8;"><i class="fas fa-sign-out-alt"></i></button>
+            <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.08); padding:5px 15px; border-radius:50px; border:1px solid rgba(255,255,255,0.1);">
+                <img src="${meta.avatar_url}" style="width:26px; height:26px; border-radius:50%;">
+                <span style="font-size:0.85rem; font-weight:700;">${meta.full_name.split('#')[0]}</span>
+                <button onclick="logout()" style="background:none; border:none; color:#ef4444; cursor:pointer; opacity:0.8;"><i class="fas fa-sign-out-alt"></i></button>
             </div>
         `;
         document.querySelectorAll('.auth-only').forEach(btn => {
@@ -49,7 +49,7 @@ function updateAuthUI() {
     }
 }
 
-// FORUM FIX: ИСПОЛЬЗУЕМ ТАБЛИЦУ TOPICS ВМЕСТО POSTS
+// FORUM: FIX FK CONSTRAINT ERROR
 async function submitPost() {
     if (!currentUser) return showToast('Сначала войдите в аккаунт!', true);
     
@@ -58,20 +58,34 @@ async function submitPost() {
 
     if (!title || !content) return showToast('Заполните все поля!', true);
 
-    // FIX: Таблица topics (есть title)
-    // content запишем в description, если нет content, или как JSON если надо.
-    // Пробуем записать content в description (обычно так в простых схемах).
+    // FIX: Пытаемся синхронизировать юзера, если его нет в публичной таблице
+    // Таблица обычно называется 'users' или 'profiles'. Попробуем 'users'.
+    // Если таблицы нет, этот шаг упадет тихо, и мы попробуем создать тему.
+    try {
+        const { error: userError } = await sb.from('users').upsert({
+            id: currentUser.id,
+            username: currentUser.user_metadata.full_name,
+            avatar_url: currentUser.user_metadata.avatar_url
+        });
+    } catch (e) {
+        console.log('Skipping user sync (table might not exist)');
+    }
+
     const { error } = await sb.from('topics').insert([{
         title: title, 
+        description: content, // Предполагаем поле description для текста
         author_id: currentUser.id
-        // Примечание: Если в topics нет колонки для текста, мы создаем тему без текста.
-        // Но обычно в topics есть description или content. Пробуем просто insert.
     }]);
 
     if (error) {
-        showToast('Ошибка базы: ' + error.message, true);
+        // Улучшенное сообщение об ошибке
+        if (error.code === '23503') { // Foreign Key Violation
+            showToast('Ошибка: Ваш профиль не найден в базе данных сервера. Сообщите администратору.', true);
+        } else {
+            showToast('Ошибка базы: ' + error.message, true);
+        }
     } else {
-        showToast('Тема создана!');
+        showToast('Тема создана успешно!');
         closeModals();
         loadTopics();
         document.getElementById('postTitle').value = '';
@@ -83,11 +97,10 @@ async function loadTopics() {
     const grid = document.getElementById('postsGrid');
     if (!grid) return;
     
-    // Читаем из topics
     const { data, error } = await sb.from('topics').select('*').order('created_at', { ascending: false });
 
     if (error || !data || data.length === 0) {
-        grid.innerHTML = '<div style="text-align:center; padding:40px; color:#555;">Тем пока нет.</div>';
+        grid.innerHTML = '<div style="text-align:center; padding:40px; color:#555;">Тем пока нет. Станьте первым!</div>';
         return;
     }
 
@@ -98,7 +111,7 @@ async function loadTopics() {
                 <span class="post-meta">${new Date(topic.created_at).toLocaleDateString()}</span>
             </div>
             <div class="post-body">
-               ${topic.description ? escapeHtml(topic.description) : 'Нет описания...'}
+               ${topic.description ? escapeHtml(topic.description) : 'Нет содержания...'}
             </div>
         </div>
     `).join('');
@@ -112,13 +125,12 @@ async function loadGallery() {
     const { data, error } = await sb.from('gallery').select('*').order('created_at', { ascending: false });
 
     if (error || !data || data.length === 0) {
-        grid.innerHTML = '<div style="text-align:center; padding:40px; color:#555;">Пусто.</div>';
+        grid.innerHTML = '<div style="text-align:center; padding:40px; color:#555;">Галерея пуста.</div>';
         return;
     }
 
     grid.innerHTML = data.map(img => {
         let deleteBtn = '';
-        // Если это фото текущего юзера - даем кнопку удалить
         if (currentUser && img.author_id === currentUser.id) {
             deleteBtn = `<button class="gallery-del-btn" onclick="deletePhoto(${img.id})" title="Удалить">&times;</button>`;
         }
@@ -156,7 +168,6 @@ async function submitPhoto() {
 
 async function deletePhoto(id) {
     if (!confirm('Удалить фото?')) return;
-    
     const { error } = await sb.from('gallery').delete().eq('id', id);
     if (error) showToast('Ошибка удаления: ' + error.message, true);
     else {
@@ -165,7 +176,7 @@ async function deletePhoto(id) {
     }
 }
 
-// UI HELPERS
+// HELPERS
 function tryOpenModal(id) {
     if (!currentUser) return showToast('Сначала войдите через Discord!', true);
     const m = document.getElementById(id);
@@ -198,7 +209,6 @@ window.onclick = (e) => {
     if (e.target.classList.contains('modal-overlay')) closeModals();
 }
 
-// CALM STARS EFFECT
 function initStars() {
     const canvas = document.getElementById('star-canvas');
     if (!canvas) return;
@@ -208,12 +218,12 @@ function initStars() {
     const resize = () => {
         w = canvas.width = window.innerWidth;
         h = canvas.height = window.innerHeight;
-        // Simple stars
-        stars = Array(150).fill().map(() => ({
+        stars = Array(120).fill().map(() => ({
             x: Math.random() * w,
             y: Math.random() * h,
             size: Math.random() * 1.5,
-            speed: Math.random() * 0.2 + 0.1 // очень медленно вниз
+            speed: Math.random() * 0.15 + 0.05,
+            alpha: Math.random()
         }));
     };
     
@@ -223,12 +233,14 @@ function initStars() {
     const draw = () => {
         ctx.clearRect(0, 0, w, h);
         ctx.fillStyle = 'white';
-        
         stars.forEach(s => {
             s.y += s.speed;
             if (s.y > h) s.y = 0;
+            s.alpha += (Math.random() - 0.5) * 0.05;
+            if (s.alpha < 0.3) s.alpha = 0.3;
+            if (s.alpha > 0.8) s.alpha = 0.8;
             
-            ctx.globalAlpha = Math.random() * 0.5 + 0.3; // мерцание
+            ctx.globalAlpha = s.alpha;
             ctx.beginPath();
             ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
             ctx.fill();
