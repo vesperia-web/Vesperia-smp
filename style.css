@@ -15,6 +15,28 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
 
+/* === CUSTOM SCROLLBAR === */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #050505;
+}
+::-webkit-scrollbar-thumb {
+    background: #2a2a30;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow);
+}
+/* Firefox support */
+html {
+    scrollbar-width: thin;
+    scrollbar-color: #2a2a30 #050505;
+}
+
 body {
     font-family: 'Montserrat', sans-serif;
     background-color: var(--bg);
@@ -123,6 +145,34 @@ body {
 .feat-card p, .wiki-card p { color: #94a3b8; font-size: 0.95rem; }
 .wiki-btn { margin-top: auto; color: var(--accent); text-decoration: none; font-weight: 700; padding-top: 15px; }
 
+/* CRAFTS */
+.crafting-container { 
+    background: #1a1a1d; padding: 40px; border-radius: 20px; 
+    border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; 
+}
+.craft-title { font-size: 1.5rem; color: white; font-weight: 700; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+.crafting-ui {
+    background: #c6c6c6; border: 4px solid #373737; border-radius: 4px; padding: 20px;
+    display: flex; align-items: center; gap: 20px; box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    position: relative;
+}
+.craft-grid { display: grid; grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(3, 40px); gap: 2px; }
+.slot, .result-slot {
+    background: #8b8b8b; border-top: 2px solid #373737; border-left: 2px solid #373737;
+    border-bottom: 2px solid #fff; border-right: 2px solid #fff;
+    display: flex; justify-content: center; align-items: center; position: relative; cursor: help;
+}
+.slot { width: 40px; height: 40px; }
+.result-slot { width: 56px; height: 56px; margin-left: 10px; }
+.slot img, .result-slot img { width: 28px; height: 28px; object-fit: contain; image-rendering: pixelated; }
+.result-slot img { width: 36px; height: 36px; }
+.craft-arrow { font-size: 24px; color: #444; font-weight: bold; }
+.slot:hover::after, .result-slot:hover::after {
+    content: attr(data-name); position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%);
+    background: #111; border: 1px solid var(--accent); padding: 5px 10px; border-radius: 4px;
+    color: white; font-size: 0.75rem; white-space: nowrap; z-index: 100; pointer-events: none;
+}
+
 /* POSTS & CHAT */
 .post-entry {
     background: rgba(255,255,255,0.02); border: 1px solid var(--border); padding: 25px;
@@ -212,6 +262,7 @@ body {
     border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;
     font-size: 1rem; z-index: 10; backdrop-filter: blur(4px); transition: 0.2s;
 }
+.gallery-del-btn:hover { background: var(--red); color: white; }
 
 /* UTILS */
 .btn {
@@ -223,6 +274,7 @@ body {
 .btn-accent { background: rgba(139, 92, 246, 0.1); color: var(--accent); border: 1px solid var(--accent); }
 .btn-accent:hover { background: var(--accent); color: white; }
 .btn-discord { background: #5865f2; color: white; }
+.btn-discord:hover { background: #4752c4; }
 .btn-send { background: var(--accent); color: white; border: none; width: 42px; height: 42px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .full-width { width: 100%; justify-content: center; margin-top: 15px; }
 .auth-only { display: none !important; }
