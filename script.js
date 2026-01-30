@@ -39,12 +39,17 @@ function updateAuthUI() {
     if (currentUser && container) {
         const meta = currentUser.user_metadata;
         container.innerHTML = `
-            <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.05); padding:5px 12px; border-radius:50px; border:1px solid var(--border);">
-                <img src="${meta.avatar_url}" style="width:28px; height:28px; border-radius:50%; border:1px solid var(--accent);">
-                <span style="font-size:0.8rem; font-weight:700;">${meta.full_name.split('#')[0]}</span>
-                <button onclick="logout()" style="background:none; border:none; color:var(--red); cursor:pointer;"><i class="fas fa-sign-out-alt"></i></button>
+            <div style="display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.06); padding:6px 16px; border-radius:50px; border:1px solid var(--border);">
+                <img src="${meta.avatar_url}" style="width:24px; height:24px; border-radius:50%; border:1px solid var(--accent);">
+                <span style="font-size:0.85rem; font-weight:700;">${meta.full_name.split('#')[0]}</span>
+                <button onclick="logout()" style="background:none; border:none; color:var(--red); cursor:pointer; opacity:0.7; transition:0.2s;"><i class="fas fa-sign-out-alt"></i></button>
             </div>
         `;
+        
+        // Show restricted buttons
+        document.querySelectorAll('.auth-only').forEach(btn => {
+            btn.style.setProperty('display', 'inline-flex', 'important');
+        });
     }
 }
 
@@ -56,7 +61,7 @@ async function loadPosts() {
     const { data, error } = await sb.from('posts').select('*').order('created_at', { ascending: false });
 
     if (error || !data || data.length === 0) {
-        grid.innerHTML = '<p style="text-align:center; opacity:0.5;">Тем пока нет.</p>';
+        grid.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">Тишина... Будьте первым!</div>';
         return;
     }
 
@@ -66,18 +71,19 @@ async function loadPosts() {
             <div class="pa-info">
                 <h4>${escapeHtml(post.title)}</h4>
                 <p>${escapeHtml(post.content)}</p>
-                <small style="opacity:0.4">Автор: ${escapeHtml(post.author_name)} | ${new Date(post.created_at).toLocaleDateString()}</small>
+                <span class="pa-meta">@${escapeHtml(post.author_name)} • ${new Date(post.created_at).toLocaleDateString()}</span>
             </div>
         </div>
     `).join('');
 }
 
 async function submitPost() {
-    if (!currentUser) return showToast('Войдите в аккаунт!', true);
+    if (!currentUser) return showToast('Сначала войдите в аккаунт!', true);
+    
     const title = document.getElementById('postTitle').value.trim();
     const content = document.getElementById('postContent').value.trim();
 
-    if (!title || !content) return showToast('Заполните все поля!', true);
+    if (!title || !content) return showToast('Заполните заголовок и сообщение!', true);
 
     const { error } = await sb.from('posts').insert([{
         title, content,
@@ -87,10 +93,10 @@ async function submitPost() {
     }]);
 
     if (error) {
-        if (error.code === '42501') showToast('Вы заглушены (Muted).', true);
-        else showToast('Ошибка: ' + error.message, true);
+        if (error.code === '42501') showToast('Вам запрещено публиковать (Muted).', true);
+        else showToast('Ошибка сервера: ' + error.message, true);
     } else {
-        showToast('Опубликовано!');
+        showToast('Тема опубликована!');
         closeModals();
         loadPosts();
         document.getElementById('postTitle').value = '';
@@ -106,13 +112,14 @@ async function loadGallery() {
     const { data, error } = await sb.from('gallery').select('*').order('created_at', { ascending: false });
 
     if (error || !data || data.length === 0) {
-        grid.innerHTML = '<p style="text-align:center; opacity:0.5;">Галерея пуста.</p>';
+        grid.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">Скриншотов пока нет. Загрузи свой!</div>';
         return;
     }
 
     grid.innerHTML = data.map(img => `
         <div class="gallery-card">
-            <img src="${img.url}" onerror="this.src='https://via.placeholder.com/400?text=Error'">
+            <img src="${img.url}" onerror="this.src='https://via.placeholder.com/400?text=Broken+Link'">
+            <div class="gallery-overlay">${escapeHtml(img.title || 'Vesperia SMP')}</div>
         </div>
     `).join('');
 }
@@ -122,7 +129,7 @@ async function submitPhoto() {
     const url = document.getElementById('photoUrl').value.trim();
     const desc = document.getElementById('photoDesc').value.trim();
 
-    if (!url) return showToast('Нужна ссылка на фото!', true);
+    if (!url) return showToast('Вставьте прямую ссылку на фото!', true);
 
     const { error } = await sb.from('gallery').insert([{ 
         url, 
@@ -132,7 +139,7 @@ async function submitPhoto() {
 
     if (error) showToast('Ошибка: ' + error.message, true);
     else {
-        showToast('Фото добавлено!');
+        showToast('Скриншот добавлен!');
         closeModals();
         loadGallery();
         document.getElementById('photoUrl').value = '';
@@ -143,7 +150,8 @@ async function submitPhoto() {
 // UTILS
 function tryOpenModal(id) {
     if (!currentUser) return showToast('Сначала авторизуйтесь через Discord!', true);
-    document.getElementById(id).classList.add('active');
+    const modal = document.getElementById(id);
+    if(modal) modal.classList.add('active');
 }
 
 function closeModals() {
@@ -155,12 +163,12 @@ function showToast(msg, isError = false) {
     if (!t) return;
     t.textContent = msg;
     t.className = isError ? 'toast-box error show' : 'toast-box show';
-    setTimeout(() => t.classList.remove('show'), 3000);
+    setTimeout(() => t.classList.remove('show'), 3500);
 }
 
 function copyIp() {
     navigator.clipboard.writeText('play.vesperiasmp.ru');
-    showToast('IP скопирован!');
+    showToast('IP скопирован! Ждем на сервере.');
 }
 
 function escapeHtml(text) {
@@ -177,22 +185,44 @@ function initStars() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let w, h, stars = [];
+    
     const resize = () => {
         w = canvas.width = window.innerWidth;
         h = canvas.height = window.innerHeight;
-        stars = Array(100).fill().map(() => ({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.5, s: Math.random() * 0.3 + 0.1 }));
+        // Create falling stars
+        stars = Array(150).fill().map(() => ({ 
+            x: Math.random() * w, 
+            y: Math.random() * h, 
+            z: Math.random() * 1.5 + 0.5, // Depth/Speed factor
+            size: Math.random() * 1.5
+        }));
     };
+    
     window.addEventListener('resize', resize);
     resize();
+    
     const draw = () => {
-        ctx.clearRect(0,0,w,h);
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        ctx.beginPath();
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = 'white';
+        
         stars.forEach(s => {
-            s.y -= s.s; if (s.y < 0) s.y = h;
-            ctx.moveTo(s.x, s.y); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+            // Move down based on depth (z)
+            s.y += s.z * 0.5; 
+            
+            // Reset if out of screen
+            if (s.y > h) {
+                s.y = 0;
+                s.x = Math.random() * w;
+            }
+            
+            // Draw star with opacity based on depth
+            ctx.globalAlpha = (s.z - 0.5) / 1.5; 
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+            ctx.fill();
         });
-        ctx.fill(); requestAnimationFrame(draw);
+        
+        requestAnimationFrame(draw);
     };
     draw();
 }
