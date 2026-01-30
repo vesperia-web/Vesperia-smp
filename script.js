@@ -1,3 +1,4 @@
+
 // CONFIG
 const SB_URL = 'https://cullffnjljejufulfhsa.supabase.co';
 const SB_KEY = 'sb_publishable_X8jiwuk5Gro4AemYjIQAuA_TB5-re6I';
@@ -5,6 +6,7 @@ const sb = supabase.createClient(SB_URL, SB_KEY);
 
 let currentUser = null;
 let isAdmin = false;
+let currentTopicId = null; // Для отслеживания открытой темы
 
 // INIT
 window.addEventListener('DOMContentLoaded', async () => {
@@ -22,6 +24,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     const path = window.location.pathname;
     if (path.includes('forum.html')) loadTopics();
     if (path.includes('gallery.html')) loadGallery();
+    
+    // Enter to send comment
+    const commentInput = document.getElementById('commentInput');
+    if (commentInput) {
+        commentInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') submitComment();
+        });
+    }
 });
 
 // AUTH
@@ -83,38 +93,7 @@ function updateAuthUI() {
     }
 }
 
-// FORUM
-async function submitPost() {
-    if (!currentUser) return showToast('Сначала войдите в аккаунт!', true);
-    
-    const title = document.getElementById('postTitle').value.trim();
-    const content = document.getElementById('postContent').value.trim();
-
-    if (!title || !content) return showToast('Заполните все поля!', true);
-
-    const { error } = await sb.from('topics').insert([{
-        title: title, 
-        description: content,
-        author_id: currentUser.id
-    }]);
-
-    if (error) {
-        console.error('Post Error:', error);
-        if (error.message.includes('schema cache')) {
-            showToast('Кеш схемы устарел. Перезагружаю...', true);
-            setTimeout(() => window.location.reload(), 2000);
-        }
-        else if (error.code === '42P01') showToast('Ошибка: Нет таблицы topics! (SQL)', true);
-        else showToast('Ошибка: ' + error.message, true);
-    } else {
-        showToast('Тема создана!');
-        closeModals();
-        loadTopics();
-        document.getElementById('postTitle').value = '';
-        document.getElementById('postContent').value = '';
-    }
-}
-
+// FORUM - TOPICS LIST
 async function loadTopics() {
     const grid = document.getElementById('postsGrid');
     if (!grid) return;
@@ -138,18 +117,25 @@ async function loadTopics() {
         const isOwner = currentUser && topic.author_id === currentUser.id;
         let deleteBtn = '';
         if (isAdmin || isOwner) {
-            deleteBtn = `<button class="post-del-btn" onclick="deleteTopic(${topic.id})" title="Удалить тему"><i class="fas fa-trash"></i></button>`;
+            // Кнопка удаления не вызывает onclick родителя (event.stopPropagation)
+            deleteBtn = `<button class="post-del-btn" onclick="event.stopPropagation(); deleteTopic(${topic.id})" title="Удалить тему"><i class="fas fa-trash"></i></button>`;
         }
 
         const authorName = topic.users ? topic.users.username : 'Игрок';
         const authorAva = topic.users ? topic.users.avatar_url : 'https://i.postimg.cc/Pf4nb7xV/logo.png';
+        
+        // Truncate logic
+        let shortDesc = topic.description || '';
+        if (shortDesc.length > 100) {
+            shortDesc = shortDesc.substring(0, 100) + '...';
+        }
 
         return `
-        <div class="post-entry">
+        <div class="post-entry" onclick="openTopic(${topic.id})">
             <div class="post-header">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <img src="${authorAva}" style="width:30px; height:30px; border-radius:50%;">
-                    <div style="display:flex; flex-direction:column;">
+                    <div style="display:flex; flex-direction:column; overflow:hidden;">
                         <span class="post-title">${escapeHtml(topic.title)}</span>
                         <span class="post-meta" style="font-size:0.75rem;">${authorName} • ${new Date(topic.created_at).toLocaleDateString()}</span>
                     </div>
@@ -157,10 +143,36 @@ async function loadTopics() {
                 ${deleteBtn}
             </div>
             <div class="post-body">
-               ${topic.description ? escapeHtml(topic.description) : ''}
+               ${escapeHtml(shortDesc)}
             </div>
         </div>
     `}).join('');
+}
+
+async function submitPost() {
+    if (!currentUser) return showToast('Сначала войдите в аккаунт!', true);
+    
+    const title = document.getElementById('postTitle').value.trim();
+    const content = document.getElementById('postContent').value.trim();
+
+    if (!title || !content) return showToast('Заполните все поля!', true);
+
+    const { error } = await sb.from('topics').insert([{
+        title: title, 
+        description: content,
+        author_id: currentUser.id
+    }]);
+
+    if (error) {
+        console.error('Post Error:', error);
+        showToast('Ошибка: ' + error.message, true);
+    } else {
+        showToast('Тема создана!');
+        closeModals();
+        loadTopics();
+        document.getElementById('postTitle').value = '';
+        document.getElementById('postContent').value = '';
+    }
 }
 
 async function deleteTopic(id) {
@@ -172,6 +184,110 @@ async function deleteTopic(id) {
         loadTopics();
     }
 }
+
+// FORUM - TOPIC DETAILS & CHAT
+async function openTopic(topicId) {
+    currentTopicId = topicId;
+    const modal = document.getElementById('topicModal');
+    const container = document.getElementById('chatContainer');
+    const titleEl = document.getElementById('topicModalTitle');
+    
+    modal.classList.add('active');
+    container.innerHTML = '<div class="loading-state">Загрузка чата...</div>';
+    
+    // 1. Get Topic Details
+    const { data: topic, error } = await sb.from('topics').select('*, users(*)').eq('id', topicId).single();
+    
+    if (error) {
+        container.innerHTML = '<div style="color:red">Ошибка загрузки темы</div>';
+        return;
+    }
+
+    titleEl.textContent = topic.title;
+
+    // 2. Render OP (Original Post) as first message
+    const opAva = topic.users ? topic.users.avatar_url : 'https://i.postimg.cc/Pf4nb7xV/logo.png';
+    const opName = topic.users ? topic.users.username : 'Автор';
+    const opIsMe = currentUser && topic.author_id === currentUser.id;
+    
+    let html = `
+        <div class="msg-row ${opIsMe ? 'mine' : ''}">
+            <img src="${opAva}" class="msg-avatar">
+            <div class="msg-content">
+                <div class="msg-header">
+                    <span class="msg-author">${opName} <i class="fas fa-crown" style="color:#fbbf24; margin-left:4px;" title="Автор темы"></i></span>
+                    <span>${new Date(topic.created_at).toLocaleTimeString().slice(0,5)}</span>
+                </div>
+                <div class="msg-bubble" style="border-color: #fbbf24; background: rgba(251, 191, 36, 0.05);">
+                    ${escapeHtml(topic.description)}
+                </div>
+            </div>
+        </div>
+        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin: 10px 0;">
+    `;
+
+    // 3. Get Comments
+    // Важно: в SQL нужна таблица comments
+    const { data: comments, error: commError } = await sb.from('comments')
+        .select('*, users(*)')
+        .eq('topic_id', topicId)
+        .order('created_at', { ascending: true });
+
+    if (!commError && comments) {
+        html += comments.map(c => {
+            const isMe = currentUser && c.user_id === currentUser.id;
+            const isAuthor = c.user_id === topic.author_id;
+            const userAva = c.users ? c.users.avatar_url : '';
+            const userName = c.users ? c.users.username : 'Unknown';
+            
+            const badge = isAuthor ? '<i class="fas fa-crown author-badge" title="Автор темы"></i>' : '';
+
+            return `
+            <div class="msg-row ${isMe ? 'mine' : ''}">
+                ${!isMe ? `<img src="${userAva}" class="msg-avatar">` : ''}
+                <div class="msg-content">
+                    <div class="msg-header">
+                        ${isMe ? `<span>${new Date(c.created_at).toLocaleTimeString().slice(0,5)}</span> <span class="msg-author">Вы</span>` 
+                               : `<span class="msg-author">${userName}${badge}</span> <span>${new Date(c.created_at).toLocaleTimeString().slice(0,5)}</span>`}
+                    </div>
+                    <div class="msg-bubble">
+                        ${escapeHtml(c.content)}
+                    </div>
+                </div>
+                ${isMe ? `<img src="${userAva}" class="msg-avatar">` : ''}
+            </div>
+            `;
+        }).join('');
+    }
+
+    container.innerHTML = html;
+    container.scrollTop = container.scrollHeight; // Scroll to bottom
+}
+
+async function submitComment() {
+    if (!currentUser) return showToast('Войдите, чтобы писать!', true);
+    if (!currentTopicId) return;
+
+    const input = document.getElementById('commentInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    // Optimistic UI update (optional, but let's wait for DB for simplicity)
+    const { error } = await sb.from('comments').insert([{
+        topic_id: currentTopicId,
+        user_id: currentUser.id,
+        content: text
+    }]);
+
+    if (error) {
+        if (error.code === '42P01') showToast('Ошибка: Нет таблицы comments (SQL)', true);
+        else showToast('Ошибка: ' + error.message, true);
+    } else {
+        input.value = '';
+        openTopic(currentTopicId); // Reload chat
+    }
+}
+
 
 // GALLERY
 async function loadGallery() {
@@ -254,6 +370,7 @@ function tryOpenModal(id) {
 
 function closeModals() {
     document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+    currentTopicId = null; // Reset chat focus
 }
 
 function showToast(msg, isError = false) {
