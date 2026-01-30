@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -48,6 +49,7 @@
         </div>
     </main>
 
+    <!-- Create Post Modal -->
     <div id="postModal" class="modal-overlay">
         <div class="modal-card">
             <div class="modal-head">
@@ -57,13 +59,32 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label>Заголовок</label>
-                    <input type="text" id="postTitle" placeholder="Суть темы">
+                    <input type="text" id="postTitle" placeholder="Суть темы" maxlength="60">
                 </div>
                 <div class="form-group">
                     <label>Сообщение</label>
                     <textarea id="postContent" rows="6" placeholder="Ваше сообщение..."></textarea>
                 </div>
                 <button class="btn btn-primary full-width" onclick="submitPost()">Опубликовать</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Topic View Modal (Chat Style) -->
+    <div id="topicModal" class="modal-overlay">
+        <div class="modal-card modal-wide">
+            <div class="modal-head">
+                <h3 id="topicModalTitle">Тема</h3>
+                <button class="close-btn" onclick="closeModals()">&times;</button>
+            </div>
+            <div class="topic-modal-body">
+                <div id="chatContainer" class="chat-container">
+                    <!-- Chat messages here -->
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="commentInput" placeholder="Написать комментарий..." style="margin:0;">
+                    <button class="btn-send" onclick="submitComment()"><i class="fas fa-paper-plane"></i></button>
+                </div>
             </div>
         </div>
     </div>
