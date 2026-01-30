@@ -31,31 +31,41 @@
                 <div id="authContainer">
                     <button class="btn btn-discord" onclick="login()"><i class="fab fa-discord"></i> Войти</button>
                 </div>
+                <button class="menu-toggle" onclick="document.querySelector('.nav-links').classList.toggle('active')"><i class="fas fa-bars"></i></button>
             </div>
         </div>
     </nav>
 
     <main class="content-container">
-        <div class="panel">
-            <div class="panel-header">
-                <h2><i class="fas fa-book"></i> База знаний</h2>
+        <h1 class="hero-title" style="text-align:center; font-size:2.5rem; margin-bottom:40px;">База Знаний</h1>
+        
+        <div class="wiki-grid">
+            <div class="wiki-card">
+                <h3><i class="fas fa-compass"></i> Путь Новичка</h3>
+                <p class="wiki-desc">С чего начать? Как пройти Whitelist, привязать аккаунт и какие моды обязательны.</p>
+                <a href="newbie-guide.html" class="wiki-btn">Открыть гайд</a>
             </div>
-            <div class="panel-body wiki-grid">
-                <div class="wiki-card">
-                    <h3><i class="fas fa-play"></i> Как начать играть?</h3>
-                    <p>Для входа на сервер вам нужно подать заявку в Discord и прописать IP. Первым делом найдите свободное место и поставьте приват.</p>
-                </div>
-                <div class="wiki-card">
-                    <h3><i class="fas fa-coins"></i> Экономика</h3>
-                    <p>Основная валюта — алмазы. Вы можете обменивать их на товары в торговом хабе или переводить другим игрокам через команду /pay.</p>
-                </div>
-                <div class="wiki-card">
-                    <h3><i class="fas fa-hat-wizard"></i> Система магии</h3>
-                    <p>На сервере нет креатива. Все заклинания изучаются через древние манускрипты, которые можно найти в данжах.</p>
-                </div>
+            <div class="wiki-card">
+                <h3><i class="fas fa-coins"></i> Лидеры и Экономика</h3>
+                <p class="wiki-desc">Как заработать Звезды, уникальные монстры-лидеры и магазин косметики.</p>
+                <a href="vesperia-plugin.html" class="wiki-btn">Читать статью</a>
+            </div>
+            <div class="wiki-card">
+                <h3><i class="fas fa-dragon"></i> Разломы (Rifts)</h3>
+                <p class="wiki-desc">Как попасть в Незер? Механика призыва аномалий, ритуалы и битва с Искажённым Стражем.</p>
+                <a href="rifts-guide.html" class="wiki-btn">Изучить ритуал</a>
+            </div>
+            <div class="wiki-card">
+                <h3><i class="fas fa-hammer"></i> Кастомные Крафты</h3>
+                <p class="wiki-desc">Рецепты, которых нет в ванильном майнкрафте. Крафт Генератора Разлома и Якоря.</p>
+                <a href="crafts.html" class="wiki-btn">Смотреть рецепты</a>
             </div>
         </div>
     </main>
+
+    <footer>
+        <p>&copy; 2026 Vesperia SMP. Все права защищены.</p>
+    </footer>
     <script src="script.js"></script>
 </body>
 </html>
