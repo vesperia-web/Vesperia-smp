@@ -55,6 +55,7 @@ body {
 .nav-container {
     max-width: 1200px; margin: 0 auto; height: 100%;
     display: flex; justify-content: space-between; align-items: center; padding: 0 25px;
+    position: relative; /* For dropdown positioning */
 }
 .nav-brand { display: flex; align-items: center; gap: 12px; font-weight: 900; letter-spacing: 1px; font-size: 1.2rem; color: white; }
 .nav-brand img { height: 38px; border-radius: 15px; }
@@ -72,16 +73,69 @@ body {
 .nav-actions { display: flex; align-items: center; gap: 15px; }
 .menu-toggle { display: none; background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; }
 
-/* AUTH & PROFILE */
+/* AUTH & PROFILE TRIGGER */
 .auth-trigger {
     display: flex; align-items: center; gap: 10px; 
     background: rgba(255,255,255,0.03); padding: 5px 8px 5px 15px; 
     border-radius: 50px; border: 1px solid rgba(255,255,255,0.1);
-    cursor: pointer; transition: 0.3s;
+    cursor: pointer; transition: 0.3s; user-select: none;
 }
-.auth-trigger:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.3); }
+.auth-trigger:hover, .auth-trigger.active { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.3); }
 .auth-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
 .auth-name { font-size: 0.85rem; font-weight: 700; color: white; }
+
+/* === NEW PROFILE DROPDOWN (COMPACT) === */
+.profile-dropdown {
+    position: absolute;
+    top: 80px; /* Right below nav */
+    right: 25px;
+    width: 260px;
+    background: #141417;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    padding: 15px;
+    display: none;
+    flex-direction: column;
+    z-index: 2000;
+    transform-origin: top right;
+    animation: scaleIn 0.2s ease;
+}
+.profile-dropdown.show { display: flex; }
+
+@keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.dropdown-header {
+    display: flex; align-items: center; gap: 12px;
+    padding-bottom: 12px; border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+}
+.dropdown-avatar { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent); }
+.dropdown-user-info { display: flex; flex-direction: column; overflow: hidden; }
+.dropdown-name { font-weight: 700; color: white; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dropdown-role { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+.dropdown-stats {
+    display: flex; justify-content: space-between; 
+    background: rgba(255,255,255,0.03); border-radius: 8px; padding: 10px;
+    margin-bottom: 12px; font-size: 0.8rem;
+}
+.d-stat { display: flex; flex-direction: column; align-items: center; width: 100%; }
+.d-label { color: #666; font-size: 0.65rem; text-transform: uppercase; font-weight: 700; }
+.d-val { color: white; font-weight: 600; margin-top: 2px; }
+
+.dropdown-btn {
+    background: rgba(255,255,255,0.05); color: #ccc;
+    border: none; padding: 8px; border-radius: 8px;
+    font-size: 0.85rem; font-weight: 600; cursor: pointer;
+    transition: 0.2s; text-align: left; display: flex; align-items: center; gap: 10px;
+}
+.dropdown-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+.dropdown-btn.logout { color: var(--red); background: rgba(239, 68, 68, 0.1); margin-top: 5px; justify-content: center; }
+.dropdown-btn.logout:hover { background: var(--red); color: white; }
 
 /* CONTENT */
 .content-container { max-width: 1100px; margin: 140px auto 80px; padding: 0 25px; flex-grow: 1; width: 100%; }
@@ -91,9 +145,14 @@ body {
 .hero-logo-box { margin: 0 auto 25px; width: 140px; }
 .hero-img { width: 100%; border-radius: 25px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); }
 .hero-title { font-size: 3.5rem; font-weight: 900; margin-bottom: 15px; color: white; letter-spacing: -1px; }
+
+/* ИСПРАВЛЕННЫЙ ГРАДИЕНТ */
 .hero-title .accent { 
-    background: linear-gradient(135deg, #fff 30%, var(--accent) 100%);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    /* Более широкий угол и больше цветов для заметности */
+    background: linear-gradient(120deg, #ffffff 0%, #bca5ff 30%, var(--accent) 60%, #7c3aed 100%);
+    -webkit-background-clip: text; 
+    -webkit-text-fill-color: transparent;
+    display: inline-block; /* Важно, чтобы градиент не обрезался */
 }
 .hero-subtitle { color: var(--text-muted); font-size: 1.1rem; max-width: 600px; margin: 0 auto 40px; }
 .hero-btns { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
@@ -193,17 +252,21 @@ body {
     font-size: 0.65rem; font-weight: 800; margin-left: 5px; border: 1px solid #555;
 }
 
-/* CHAT ACTIONS (ADMIN) */
+/* CHAT ACTIONS (ADMIN) - FIXED VISIBILITY */
 .chat-admin-actions {
-    display: flex; gap: 6px; margin-left: 10px; opacity: 0; transition: 0.2s;
+    display: flex; gap: 6px; margin-left: 8px;
+    opacity: 0.6; /* Всегда немного видно */
+    transition: 0.2s;
 }
-.msg-row:hover .chat-admin-actions { opacity: 1; }
+.msg-row:hover .chat-admin-actions, .chat-admin-actions:hover { opacity: 1; } /* Ярче при наведении */
+
 .chat-action-btn {
-    font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; border: none; cursor: pointer; color: white;
+    font-size: 0.7rem; padding: 3px 7px; border-radius: 4px; border: none; cursor: pointer; color: white;
+    display: flex; align-items: center; justify-content: center;
 }
-.btn-chat-ban { background: rgba(251, 191, 36, 0.2); color: var(--gold); }
+.btn-chat-ban { background: rgba(251, 191, 36, 0.2); color: var(--gold); border: 1px solid rgba(251, 191, 36, 0.3); }
 .btn-chat-ban:hover { background: var(--gold); color: black; }
-.btn-chat-del { background: rgba(239, 68, 68, 0.2); color: var(--red); }
+.btn-chat-del { background: rgba(239, 68, 68, 0.2); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
 .btn-chat-del:hover { background: var(--red); color: white; }
 
 .chat-image { max-width: 100%; border-radius: 8px; margin-top: 5px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
@@ -252,7 +315,7 @@ input:focus, textarea:focus { border-color: var(--accent); background: #111; }
 .form-group { margin-bottom: 20px; }
 label { font-size: 0.85rem; color: var(--text-muted); font-weight: 700; margin-left: 2px; }
 
-/* PROFILE MODAL */
+/* MODAL GENERAL (Used for add member, posts, etc) */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); display: none; justify-content: center; align-items: center; z-index: 2000; }
 .modal-overlay.active { display: flex; }
 .modal-card { background: #141417; border: 1px solid var(--border); width: 90%; max-width: 480px; border-radius: 20px; box-shadow: 0 25px 60px rgba(0,0,0,0.7); display: flex; flex-direction: column; overflow: hidden; }
@@ -262,20 +325,6 @@ label { font-size: 0.85rem; color: var(--text-muted); font-weight: 700; margin-l
 .close-btn { background: none; border: none; color: #666; font-size: 1.5rem; cursor: pointer; }
 .close-btn:hover { color: var(--red); }
 .modal-body { padding: 25px; overflow-y: auto; }
-
-/* PROFILE SPECIFIC */
-.profile-header { background: linear-gradient(to bottom, #1f1f23, #141417); padding: 30px; text-align: center; border-bottom: 1px solid var(--border); position: relative; }
-.profile-avatar-xl { width: 90px; height: 90px; border-radius: 50%; border: 3px solid #141417; box-shadow: 0 0 0 2px var(--accent); margin-bottom: 15px; }
-.profile-name { font-size: 1.4rem; font-weight: 800; color: white; margin-bottom: 5px; }
-.profile-role { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
-.profile-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 25px; }
-.stat-box { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 12px; padding: 15px; text-align: center; }
-.stat-label { font-size: 0.75rem; color: #888; text-transform: uppercase; font-weight: 700; margin-bottom: 5px; }
-.stat-value { font-size: 1rem; color: white; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
-.status-active { color: var(--green); text-shadow: 0 0 10px rgba(16, 185, 129, 0.4); }
-.status-banned { color: var(--red); }
-.status-none { color: #666; }
-.profile-actions { padding: 0 25px 25px; display: flex; gap: 10px; }
 
 /* STAFF ROLES */
 .role-owner { 
@@ -336,4 +385,5 @@ footer { margin-top: auto; text-align: center; padding: 40px; border-top: 1px so
     .menu-toggle { display: block; }
     .hero-title { font-size: 2.8rem; }
     .modal-wide { width: 100%; height: 100%; border-radius: 0; }
+    .profile-dropdown { right: 10px; left: 10px; width: auto; }
 }
