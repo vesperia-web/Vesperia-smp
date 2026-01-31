@@ -6,37 +6,43 @@ const sb = supabase.createClient(SB_URL, SB_KEY);
 
 let currentUser = null;
 let isAdmin = false;
+let userStatus = 'none'; // active, banned, none
 let currentTopicId = null;
 
 // INIT
 window.addEventListener('DOMContentLoaded', async () => {
     initStars();
+    createProfileModal(); 
     
-    const { data: { session } } = await sb.auth.getSession();
-    if (session) {
-        currentUser = session.user;
-        await syncUserProfile(); 
-        updateAuthUI();
-    }
+    // 1. ЗАГРУЗКА КОНТЕНТА
+    const isForum = document.getElementById('postsGrid');
+    const isGallery = document.getElementById('galleryGrid');
 
-    const path = window.location.pathname;
-    if (path.includes('forum.html')) loadTopics();
-    if (path.includes('gallery.html')) loadGallery();
-    
+    if (isForum) loadTopics();
+    if (isGallery) loadGallery();
+
+    // 2. АВТОРИЗАЦИЯ
+    try {
+        const { data, error } = await sb.auth.getSession();
+        if (data && data.session) {
+            currentUser = data.session.user;
+            await syncUserProfile(); 
+            updateAuthUI();
+            
+            // Перезагрузка для админ-кнопок
+            if (isForum) loadTopics(); 
+            if (isGallery) loadGallery();
+        }
+    } catch (e) { console.error("Auth error:", e); }
+
     const commentInput = document.getElementById('commentInput');
     if (commentInput) {
-        commentInput.addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') submitComment();
-        });
+        commentInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') submitComment(); });
     }
 });
 
-// AUTH
 async function login() {
-    await sb.auth.signInWithOAuth({
-        provider: 'discord',
-        options: { redirectTo: window.location.href }
-    });
+    await sb.auth.signInWithOAuth({ provider: 'discord', options: { redirectTo: window.location.href } });
 }
 
 async function logout() {
@@ -47,446 +53,262 @@ async function logout() {
 async function syncUserProfile() {
     if (!currentUser) return;
     try {
-        const { data, error } = await sb.from('users').upsert({
+        const { data } = await sb.from('users').upsert({
             id: currentUser.id,
             username: currentUser.user_metadata.full_name,
             avatar_url: currentUser.user_metadata.avatar_url
-        }).select('role').single();
+        }).select('role, status').single();
 
-        if (data && data.role === 'admin') {
-            isAdmin = true;
+        if (data) {
+            if (data.role === 'admin') isAdmin = true;
+            if (data.status) userStatus = data.status;
         }
-        if (error && error.code === '42P01') {
-            showToast('ERR: Tables not found', true);
-        }
-    } catch (e) { console.error(e); }
+    } catch (e) {}
 }
 
 function updateAuthUI() {
     const container = document.getElementById('authContainer');
     if (currentUser && container) {
         const meta = currentUser.user_metadata;
-        const adminBadge = isAdmin ? '<span style="background:#ef4444; color:white; font-size:0.6rem; padding:2px 6px; border-radius:4px; margin-right:5px;">ADMIN</span>' : '';
-
+        // Кликабельный профиль
         container.innerHTML = `
-            <div style="display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.08); padding:5px 15px; border-radius:50px; border:1px solid rgba(255,255,255,0.1);">
-                ${adminBadge}
-                <img src="${meta.avatar_url}" style="width:26px; height:26px; border-radius:50%;">
-                <span style="font-size:0.85rem; font-weight:700;">${meta.full_name.split('#')[0]}</span>
-                <button onclick="logout()" style="background:none; border:none; color:#ef4444; cursor:pointer; opacity:0.8;"><i class="fas fa-sign-out-alt"></i></button>
+            <div class="auth-trigger" onclick="openProfile()">
+                <img src="${meta.avatar_url}" class="auth-avatar">
+                <span class="auth-name">${meta.full_name.split('#')[0]}</span>
+                ${isAdmin ? '<span style="color:#ef4444; font-size:1.2rem; line-height:0;">•</span>' : ''}
             </div>
         `;
-        // Только админ видит кнопки "Добавить" в галерее
         document.querySelectorAll('.auth-only').forEach(btn => {
-            if (btn.innerText.includes('тему') || isAdmin) {
-               btn.style.setProperty('display', 'inline-flex', 'important');
-            }
+            if (isAdmin || btn.innerText.includes('тему')) btn.style.setProperty('display', 'inline-flex', 'important');
         });
     }
 }
 
-// === FORUM ===
+// === PROFILE SYSTEM ===
+function createProfileModal() {
+    if (document.getElementById('profileModal')) return;
+    const modalHTML = `
+    <div id="profileModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="profile-header">
+                <img src="" id="profAvatar" class="profile-avatar-xl">
+                <div id="profName" class="profile-name">Username</div>
+                <div id="profRole" class="profile-role">Player</div>
+                <button class="close-btn" onclick="closeModals()" style="position:absolute; top:20px; right:20px; color:white;">&times;</button>
+            </div>
+            <div class="profile-stats">
+                <div class="stat-box">
+                    <div class="stat-label">Статус Проходки</div>
+                    <div class="stat-value" id="profStatus">Проверка...</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">ID Аккаунта</div>
+                    <div class="stat-value" style="font-size:0.7rem; font-family:monospace;" id="profId">...</div>
+                </div>
+            </div>
+            <div class="profile-actions">
+                <button class="btn btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Выйти из аккаунта</button>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
 
+function openProfile() {
+    if (!currentUser) return;
+    document.getElementById('profAvatar').src = currentUser.user_metadata.avatar_url;
+    document.getElementById('profName').textContent = currentUser.user_metadata.full_name;
+    document.getElementById('profRole').textContent = isAdmin ? 'Administrator' : 'Player';
+    document.getElementById('profId').textContent = currentUser.id.slice(0, 13) + '...';
+    
+    const statusEl = document.getElementById('profStatus');
+    if (userStatus === 'active') {
+        statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Активен';
+        statusEl.className = 'stat-value status-active';
+    } else if (userStatus === 'banned') {
+        statusEl.innerHTML = '<i class="fas fa-ban"></i> Забанен';
+        statusEl.className = 'stat-value status-banned';
+    } else {
+        statusEl.innerHTML = '<i class="fas fa-times-circle"></i> Нет';
+        statusEl.className = 'stat-value status-none';
+    }
+    document.getElementById('profileModal').classList.add('active');
+}
+
+// === FORUM ===
 async function loadTopics() {
     const grid = document.getElementById('postsGrid');
     if (!grid) return;
     
-    // Получаем список тем
-    const { data, error } = await sb.from('topics').select('*, users(username, avatar_url)').order('created_at', { ascending: false });
+    const { data, error } = await sb.from('topics')
+        .select('*, users(username, avatar_url, role)')
+        .order('created_at', { ascending: false });
 
-    if (error) {
-        if (error.code === '42P01') grid.innerHTML = '<div style="color:red; text-align:center;">ОШИБКА: Выполните SQL код в Supabase!</div>';
-        return;
-    }
-
-    if (!data || data.length === 0) {
-        grid.innerHTML = '<div style="text-align:center; padding:40px; color:#555;">Тем пока нет.</div>';
+    if (error || !data || data.length === 0) {
+        grid.innerHTML = '<div style="text-align:center; padding:40px; color:#555;">Тем пока нет или ошибка загрузки.</div>';
         return;
     }
 
     grid.innerHTML = data.map(topic => {
         const isOwner = currentUser && topic.author_id === currentUser.id;
         let actions = '';
-        
-        // ADMIN: Удаление
-        if (isAdmin) {
-            actions += `<button class="post-btn delete" onclick="event.stopPropagation(); deleteTopic(${topic.id})" title="Удалить"><i class="fas fa-trash"></i></button>`;
-        }
-        
-        // ADMIN & OWNER: Закрыть/Открыть
+        if (isAdmin) actions += `<button class="post-btn delete" onclick="event.stopPropagation(); deleteTopic(${topic.id})"><i class="fas fa-trash"></i></button>`;
         if (isAdmin || isOwner) {
-            const isClosed = topic.is_closed === true; // Handle nulls safely
-            const lockIcon = isClosed ? 'fa-lock-open' : 'fa-lock';
-            const lockTitle = isClosed ? 'Открыть тему' : 'Закрыть тему';
-            // Explicitly pass boolean
-            actions += `<button class="post-btn lock" onclick="event.stopPropagation(); toggleTopicStatus(${topic.id}, ${isClosed})" title="${lockTitle}"><i class="fas ${lockIcon}"></i></button>`;
+            const isClosed = topic.is_closed === true;
+            actions += `<button class="post-btn lock" onclick="event.stopPropagation(); toggleTopicStatus(${topic.id}, ${isClosed})"><i class="fas ${isClosed ? 'fa-lock-open' : 'fa-lock'}"></i></button>`;
         }
 
-        const authorName = topic.users ? topic.users.username : 'Игрок';
-        const authorAva = topic.users ? topic.users.avatar_url : 'https://i.postimg.cc/Pf4nb7xV/logo.png';
-        const isClosed = topic.is_closed === true;
-        const closedClass = isClosed ? 'closed' : '';
-        const closedLabel = isClosed ? '<span class="closed-icon"><i class="fas fa-lock"></i> Закрыто</span>' : '';
-
-        // Обрезка текста
-        let shortDesc = topic.description || '';
-        if (shortDesc.length > 100) shortDesc = shortDesc.substring(0, 100) + '...';
+        const author = topic.users || { username: 'Неизвестный', avatar_url: '', role: 'user' };
+        const adminTag = author.role === 'admin' ? '<span class="admin-tag">ADMIN</span>' : '';
+        const closedLabel = topic.is_closed ? '<span class="closed-icon"><i class="fas fa-lock"></i></span>' : '';
 
         return `
-        <div class="post-entry ${closedClass}" onclick="openTopic(${topic.id})">
+        <div class="post-entry ${topic.is_closed ? 'closed' : ''}" onclick="openTopic(${topic.id})">
             <div class="post-header">
                 <div style="display:flex; align-items:center; gap:10px;">
-                    <img src="${authorAva}" style="width:30px; height:30px; border-radius:50%;">
+                    <img src="${author.avatar_url || 'https://i.postimg.cc/Pf4nb7xV/logo.png'}" style="width:32px; height:32px; border-radius:50%;">
                     <div style="display:flex; flex-direction:column; overflow:hidden;">
                         <span class="post-title">${escapeHtml(topic.title)} ${closedLabel}</span>
-                        <span class="post-meta" style="font-size:0.75rem;">${authorName} • ${new Date(topic.created_at).toLocaleDateString()}</span>
+                        <span class="post-meta">${author.username}${adminTag} • ${new Date(topic.created_at).toLocaleDateString()}</span>
                     </div>
                 </div>
-                <div class="topic-actions">
-                    ${actions}
-                </div>
+                <div class="topic-actions">${actions}</div>
             </div>
-            <div class="post-body">
-               ${escapeHtml(shortDesc)}
-            </div>
+            <div class="post-body">${escapeHtml(topic.description).substring(0, 120)}...</div>
         </div>
     `}).join('');
 }
 
 async function submitPost() {
-    if (!currentUser) return showToast('Сначала войдите в аккаунт!', true);
+    if (!currentUser) return showToast('Нужен вход!', true);
     const title = document.getElementById('postTitle').value.trim();
     const content = document.getElementById('postContent').value.trim();
+    if (!title || !content) return showToast('Заполните поля!', true);
 
-    if (!title || !content) return showToast('Заполните все поля!', true);
-    if (title.length > 60) return showToast('Заголовок макс. 60 символов', true);
-
-    const { error } = await sb.from('topics').insert([{
-        title: title, 
-        description: content,
-        author_id: currentUser.id
-    }]);
-
-    if (error) showToast('Ошибка: ' + error.message, true);
-    else {
-        showToast('Тема создана!');
-        closeModals();
-        loadTopics();
-        document.getElementById('postTitle').value = '';
-        document.getElementById('postContent').value = '';
-    }
+    const { error } = await sb.from('topics').insert([{ title, description: content, author_id: currentUser.id }]);
+    if (!error) { showToast('Тема создана!'); closeModals(); loadTopics(); }
 }
 
 async function deleteTopic(id) {
-    if (!confirm('АДМИН: Удалить тему навсегда?')) return;
-    const { error } = await sb.from('topics').delete().eq('id', id);
-    if (!error) loadTopics();
+    if (confirm('Удалить?')) { await sb.from('topics').delete().eq('id', id); loadTopics(); }
+}
+async function toggleTopicStatus(id, s) {
+    await sb.from('topics').update({ is_closed: !s }).eq('id', id); loadTopics();
 }
 
-async function toggleTopicStatus(id, currentStatus) {
-    // ВАЖНО: Выполните SQL команду для разрешения UPDATE
-    const { error } = await sb.from('topics').update({ is_closed: !currentStatus }).eq('id', id);
-    if (error) {
-        console.error(error);
-        showToast('Ошибка! Выполни SQL для прав доступа.', true);
-    }
-    else loadTopics();
-}
-
-// === CHAT & COMMENTS ===
-
+// === CHAT ===
 async function openTopic(topicId) {
     currentTopicId = topicId;
-    const modal = document.getElementById('topicModal');
+    document.getElementById('topicModal').classList.add('active');
     const container = document.getElementById('chatContainer');
-    const titleEl = document.getElementById('topicModalTitle');
-    const inputArea = document.querySelector('.chat-input-area');
-    
-    modal.classList.add('active');
     container.innerHTML = '<div class="loading-state">Загрузка...</div>';
     
-    // Загрузка топика
-    const { data: topic, error } = await sb.from('topics').select('*, users(*)').eq('id', topicId).single();
-    if (error) {
-        container.innerHTML = '<div style="color:red">Ошибка загрузки темы</div>';
-        return;
-    }
+    const { data: topic } = await sb.from('topics').select('*, users(*)').eq('id', topicId).single();
+    if (!topic) return;
 
-    titleEl.textContent = topic.title;
-
-    // Проверка статуса (Закрыто?)
-    if (topic.is_closed) {
-        inputArea.style.display = 'none';
-        if (!document.getElementById('closedMsg')) {
-            const msg = document.createElement('div');
-            msg.id = 'closedMsg';
-            msg.className = 'chat-closed-msg';
-            msg.innerHTML = '<i class="fas fa-lock"></i> Эта тема закрыта.';
-            inputArea.parentNode.appendChild(msg);
-        } else {
-             document.getElementById('closedMsg').style.display = 'block';
-        }
-    } else {
-        inputArea.style.display = 'flex';
-        const msg = document.getElementById('closedMsg');
-        if (msg) msg.style.display = 'none';
-    }
-
-    // Рендер сообщения автора
-    const opUser = topic.users || {};
-    const opIsAdmin = opUser.role === 'admin';
-    const opIsMe = currentUser && topic.author_id === currentUser.id;
+    document.getElementById('topicModalTitle').textContent = topic.title;
     
-    let html = renderMessage(
-        opUser.username || 'Автор', 
-        opUser.avatar_url, 
-        topic.description, 
-        topic.created_at, 
-        opIsMe, 
-        true, // isAuthor
-        opIsAdmin
-    );
-    html += '<hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin: 10px 0;">';
-
-    // Загрузка комментариев
-    const { data: comments, error: commError } = await sb.from('comments')
-        .select('*, users(*)')
-        .eq('topic_id', topicId)
-        .order('created_at', { ascending: true });
-
-    if (comments) {
-        html += comments.map(c => {
-            const u = c.users || {};
-            return renderMessage(
-                u.username || 'Unknown',
-                u.avatar_url,
-                c.content,
-                c.created_at,
-                currentUser && c.user_id === currentUser.id,
-                c.user_id === topic.author_id,
-                u.role === 'admin'
-            );
-        }).join('');
+    // Закрыто?
+    const inputArea = document.querySelector('.chat-input-area');
+    const closedMsg = document.getElementById('closedMsg') || document.createElement('div');
+    closedMsg.id = 'closedMsg'; closedMsg.className = 'chat-closed-msg'; closedMsg.innerHTML = '<i class="fas fa-lock"></i> Тема закрыта';
+    if(topic.is_closed) { 
+        inputArea.style.display = 'none'; 
+        if(!closedMsg.parentNode) inputArea.parentNode.appendChild(closedMsg);
+        closedMsg.style.display = 'block';
+    } else { 
+        inputArea.style.display = 'flex'; 
+        closedMsg.style.display = 'none';
     }
 
+    const { data: comments } = await sb.from('comments').select('*, users(*)').eq('topic_id', topicId).order('created_at');
+    
+    let html = renderMessage(topic.users, topic.description, topic.created_at, true); // OP
+    html += '<hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:10px 0;">';
+    if (comments) html += comments.map(c => renderMessage(c.users, c.content, c.created_at, false, topic.author_id)).join('');
+    
     container.innerHTML = html;
     container.scrollTop = container.scrollHeight;
 }
 
-function renderMessage(name, avatar, text, date, isMe, isTopicAuthor, isAdminUser) {
-    const avatarUrl = avatar || 'https://i.postimg.cc/Pf4nb7xV/logo.png';
-    const time = new Date(date).toLocaleTimeString().slice(0,5);
+function renderMessage(user, text, date, isOp, opId) {
+    user = user || { username: 'User', avatar_url: '', role: 'user' };
+    const isMe = currentUser && user.id === currentUser.id;
+    const isTopicAuthor = user.id === opId || isOp;
     
-    const adminTag = isAdminUser ? '<span class="admin-tag">ADMIN</span>' : '';
-    const authorIcon = isTopicAuthor ? '<i class="fas fa-crown" style="color:#fbbf24; margin-left:4px;" title="Автор темы"></i>' : '';
-    
-    // Кнопка ответа
-    const replyBtn = (!isMe && currentUser) ? `<button class="reply-btn" onclick="replyTo('${name}')" title="Ответить"><i class="fas fa-reply"></i></button>` : '';
-
-    // Парсинг картинок
-    const processedText = parseContent(text);
-
     return `
     <div class="msg-row ${isMe ? 'mine' : ''}">
-        ${!isMe ? `<img src="${avatarUrl}" class="msg-avatar">` : ''}
+        ${!isMe ? `<img src="${user.avatar_url}" class="msg-avatar">` : ''}
         <div class="msg-content">
             <div class="msg-header">
-                ${isMe 
-                    ? `<span>${time}</span> <span class="msg-author">Вы</span> ${adminTag}` 
-                    : `<span class="msg-author">${name}</span> ${adminTag} ${authorIcon} <span>${time}</span> ${replyBtn}`
-                }
+                ${isMe ? 'Вы' : user.username} 
+                ${user.role === 'admin' ? '<span class="admin-tag">ADMIN</span>' : ''}
+                ${isTopicAuthor && !isOp ? '<i class="fas fa-crown" style="color:gold"></i>' : ''}
+                <span style="opacity:0.5; font-size:0.7em; margin-left:5px">${new Date(date).toLocaleTimeString().slice(0,5)}</span>
             </div>
-            <div class="msg-bubble" ${isTopicAuthor ? 'style="border-color:#fbbf24; background:rgba(251,191,36,0.05);"' : ''}>
-                ${processedText}
+            <div class="msg-bubble" ${isOp ? 'style="border-color:#fbbf24; background:rgba(251,191,36,0.05);"' : ''}>
+                ${escapeHtml(text).replace(/(https?:\/\/\S+\.(?:png|jpg|webp))/gi, '<img src="$1" class="chat-image">')}
             </div>
         </div>
-        ${isMe ? `<img src="${avatarUrl}" class="msg-avatar">` : ''}
-    </div>
-    `;
-}
-
-// Превращает ссылки на картинки в <img>
-function parseContent(text) {
-    const safeText = escapeHtml(text);
-    // Регулярка для поиска URL картинок
-    const imgRegex = /(https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)(?:\?\S*)?)/gi;
-    
-    return safeText.replace(imgRegex, (match) => {
-        return `<img src="${match}" class="chat-image" onclick="window.open('${match}', '_blank')">`;
-    });
-}
-
-function replyTo(username) {
-    const input = document.getElementById('commentInput');
-    if (!input) return;
-    input.value = `@${username}, ` + input.value;
-    input.focus();
+    </div>`;
 }
 
 async function submitComment() {
-    if (!currentUser) return showToast('Войдите, чтобы писать!', true);
-    if (!currentTopicId) return;
-
+    if (!currentUser || !currentTopicId) return;
     const input = document.getElementById('commentInput');
-    const text = input.value.trim();
-    if (!text) return;
-
-    // Проверка, не закрыта ли тема (дополнительно на фронте)
-    // В идеале RLS должно блокировать, но проверим тут для UI
-    if (document.getElementById('closedMsg') && document.getElementById('closedMsg').style.display === 'block') {
-        return showToast('Тема закрыта!', true);
-    }
-
-    const { error } = await sb.from('comments').insert([{
-        topic_id: currentTopicId,
-        user_id: currentUser.id,
-        content: text
-    }]);
-
-    if (error) showToast('Ошибка: ' + error.message, true);
-    else {
-        input.value = '';
-        openTopic(currentTopicId);
-    }
+    const { error } = await sb.from('comments').insert([{ topic_id: currentTopicId, user_id: currentUser.id, content: input.value }]);
+    if (!error) { input.value = ''; openTopic(currentTopicId); }
 }
 
 // === GALLERY ===
-
 async function loadGallery() {
     const grid = document.getElementById('galleryGrid');
     if (!grid) return;
-
-    const { data, error } = await sb.from('gallery').select('*').order('created_at', { ascending: false });
-
-    if (error && error.code === '42P01') {
-        grid.innerHTML = '<div style="color:red; text-align:center;">ОШИБКА: Таблицы не созданы.</div>';
-        return;
-    }
-
-    if (!data || data.length === 0) {
-        grid.innerHTML = '<div style="text-align:center; padding:40px; color:#555; grid-column:1/-1;">Галерея пуста.</div>';
-        return;
-    }
-
-    grid.innerHTML = data.map(img => {
-        // ТОЛЬКО АДМИН МОЖЕТ УДАЛЯТЬ
-        let deleteBtn = '';
-        if (isAdmin) {
-            deleteBtn = `<button class="gallery-del-btn" onclick="deletePhoto(${img.id})" title="Удалить">&times;</button>`;
-        }
-        
-        return `
-        <div class="gallery-card">
-            <img src="${img.url}" onerror="this.src='https://via.placeholder.com/400?text=Ссылка+битая'">
-            ${deleteBtn}
-            <div style="position:absolute; bottom:0; left:0; width:100%; padding:10px; background:linear-gradient(to top, rgba(0,0,0,0.8), transparent); color:white; font-size:0.85rem;">
-                ${escapeHtml(img.title)}
-            </div>
-        </div>
-        `;
-    }).join('');
-}
-
-async function submitPhoto() {
-    if (!isAdmin) return showToast('Только админы могут добавлять фото!', true);
+    const { data } = await sb.from('gallery').select('*').order('created_at', { ascending: false });
+    if (!data || !data.length) { grid.innerHTML = 'Пусто.'; return; }
     
-    const url = document.getElementById('photoUrl').value.trim();
-    const desc = document.getElementById('photoDesc').value.trim();
-    if (!url) return showToast('Вставьте ссылку!', true);
-
-    const { error } = await sb.from('gallery').insert([{ 
-        url, title: desc, author_id: currentUser.id 
-    }]);
-
-    if (error) showToast('Ошибка: ' + error.message, true);
-    else {
-        showToast('Фото добавлено!');
-        closeModals();
-        loadGallery();
-        document.getElementById('photoUrl').value = '';
-        document.getElementById('photoDesc').value = '';
-    }
+    grid.innerHTML = data.map(img => `
+        <div class="gallery-card">
+            <img src="${img.url}">
+            ${isAdmin ? `<button class="gallery-del-btn" onclick="deletePhoto(${img.id})">&times;</button>` : ''}
+            <div style="position:absolute; bottom:0; left:0; width:100%; padding:10px; background:linear-gradient(to top, rgba(0,0,0,0.8), transparent); color:white; font-size:0.8rem;">${escapeHtml(img.title)}</div>
+        </div>
+    `).join('');
 }
-
-async function deletePhoto(id) {
-    if (!confirm('Удалить фото?')) return;
-    const { error } = await sb.from('gallery').delete().eq('id', id);
-    if (!error) loadGallery();
+async function submitPhoto() {
+    const url = document.getElementById('photoUrl').value;
+    const title = document.getElementById('photoDesc').value;
+    if (url) await sb.from('gallery').insert([{ url, title, author_id: currentUser.id }]);
+    closeModals(); loadGallery();
 }
+async function deletePhoto(id) { if(confirm('Удалить?')) { await sb.from('gallery').delete().eq('id', id); loadGallery(); } }
 
-// === UTILS ===
-
-function tryOpenModal(id) {
-    if (!currentUser) return showToast('Сначала войдите!', true);
-    if (id === 'photoModal' && !isAdmin) return showToast('Доступно только Админам!', true);
-    document.getElementById(id).classList.add('active');
+// UTILS
+function closeModals() { document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active')); }
+function tryOpenModal(id) { document.getElementById(id).classList.add('active'); }
+function showToast(msg) { 
+    const t = document.getElementById('toast'); 
+    t.innerText = msg; t.classList.add('show'); 
+    setTimeout(() => t.classList.remove('show'), 3000); 
 }
-
-function closeModals() {
-    document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
-    currentTopicId = null;
-}
-
-function showToast(msg, isError = false) {
-    const t = document.getElementById('toast');
-    if (!t) return;
-    t.textContent = msg;
-    t.className = isError ? 'toast-box error show' : 'toast-box show';
-    setTimeout(() => t.classList.remove('show'), 3500);
-}
-
-function copyIp() {
-    navigator.clipboard.writeText('play.vesperiasmp.ru');
-    showToast('IP скопирован!');
-}
-
-function escapeHtml(text) {
-    if (!text) return '';
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-window.onclick = (e) => {
-    if (e.target.classList.contains('modal-overlay')) closeModals();
-}
+function copyIp() { navigator.clipboard.writeText('play.vesperiasmp.ru'); showToast('IP скопирован!'); }
+function escapeHtml(t) { return t ? t.replace(/&/g, "&amp;").replace(/</g, "&lt;") : ''; }
+window.onclick = (e) => { if (e.target.classList.contains('modal-overlay')) closeModals(); }
 
 function initStars() {
-    const canvas = document.getElementById('star-canvas');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let w = canvas.width = window.innerWidth;
-    let h = canvas.height = window.innerHeight;
-    
-    // Оптимизация: меньше звезд
-    const stars = Array(80).fill().map(() => ({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        size: Math.random() * 1.5,
-        speed: Math.random() * 0.1 + 0.02,
-        alpha: Math.random()
-    }));
-    
-    window.addEventListener('resize', () => {
-        w = canvas.width = window.innerWidth;
-        h = canvas.height = window.innerHeight;
-    });
-    
-    const draw = () => {
-        ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = 'white';
-        for (let s of stars) {
-            s.y += s.speed;
-            if (s.y > h) s.y = 0;
-            s.alpha += (Math.random() - 0.5) * 0.05;
-            // Limit alpha
-            if(s.alpha < 0.2) s.alpha = 0.2;
-            if(s.alpha > 0.7) s.alpha = 0.7;
-            
-            ctx.globalAlpha = s.alpha;
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-            ctx.fill();
-        }
+    const c = document.getElementById('star-canvas');
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    let w = c.width = window.innerWidth, h = c.height = window.innerHeight;
+    const stars = Array(80).fill().map(() => ({x:Math.random()*w, y:Math.random()*h, s:Math.random()*1.5}));
+    function draw() {
+        ctx.clearRect(0,0,w,h); ctx.fillStyle='white';
+        stars.forEach(st => { 
+            st.y += 0.05; if(st.y>h) st.y=0; 
+            ctx.globalAlpha=Math.random()*0.5+0.2; 
+            ctx.beginPath(); ctx.arc(st.x,st.y,st.s,0,6.28); ctx.fill(); 
+        });
         requestAnimationFrame(draw);
-    };
+    }
     draw();
 }
