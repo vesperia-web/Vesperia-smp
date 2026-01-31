@@ -6,6 +6,8 @@ const sb = supabase.createClient(SB_URL, SB_KEY);
 
 // DEFAULT ASSETS
 const DEFAULT_AVATAR = 'https://i.postimg.cc/Pf4nb7xV/logo.png';
+// СПИСОК НИКОВ АДМИНОВ (ДЛЯ UI)
+const ADMIN_NICKS = ['_shark2011', 'r_leynar'];
 
 let currentUser = null;
 let isAdmin = false;
@@ -58,11 +60,13 @@ window.logout = async function() {
 async function syncUserProfile() {
     if (!currentUser) return;
     try {
-        // --- ADMIN BACKDOOR FOR SHARK ---
-        // Если ник _shark2011, принудительно даем права (визуально и локально)
-        // В реальной базе лучше все же выдать роль 'admin' через SQL.
-        const discordName = currentUser.user_metadata.full_name || '';
-        if (discordName.includes('_shark2011')) {
+        // --- ADMIN BACKDOOR ---
+        // Проверяем, есть ли ник пользователя в списке админов
+        const discordName = (currentUser.user_metadata.full_name || '').toLowerCase();
+        
+        // Проверка: содержится ли discordName в списке разрешенных (или наоборот)
+        // Для простоты ищем частичное совпадение
+        if (ADMIN_NICKS.some(nick => discordName.includes(nick))) {
             isAdmin = true;
         }
         // -------------------------------
@@ -131,8 +135,11 @@ async function loadTopics() {
         const author = topic.users || {};
         const authorName = author.username || 'Неизвестный';
         const authorAva = author.avatar_url || DEFAULT_AVATAR;
-        // ПРЕФИКС ПЕРЕД НИКОМ
-        const adminTag = author.role === 'admin' ? '<span class="admin-tag">ADMIN</span> ' : '';
+        
+        // VISUAL PREFIX LOGIC FOR TOPICS
+        const authorNameLower = authorName.toLowerCase();
+        const isHardcodedAdmin = ADMIN_NICKS.some(nick => authorNameLower.includes(nick));
+        const adminTag = (author.role === 'admin' || isHardcodedAdmin) ? '<span class="admin-tag">ADMIN</span> ' : '';
         const closedLabel = topic.is_closed ? '<span class="closed-icon"><i class="fas fa-lock"></i></span>' : '';
 
         return `
@@ -225,10 +232,14 @@ function renderMessage(user, text, date, isOpPost, opId) {
     
     const isMe = currentUser && safeUser.id === currentUser.id;
     const isTopicAuthor = (user && user.id === opId) || isOpPost; 
-    const isAdminUser = safeUser.role === 'admin';
     
     const avatar = safeUser.avatar_url || DEFAULT_AVATAR;
     const name = safeUser.username || 'Игрок';
+
+    // VISUAL PREFIX LOGIC FOR CHAT
+    const nameLower = name.toLowerCase();
+    const isHardcodedAdmin = ADMIN_NICKS.some(nick => nameLower.includes(nick));
+    const isAdminUser = safeUser.role === 'admin' || isHardcodedAdmin;
 
     // ПРЕФИКС ПЕРЕД ИМЕНЕМ В ЧАТЕ
     const adminTagHTML = isAdminUser ? '<span class="admin-tag">ADMIN</span> ' : '';
@@ -305,7 +316,6 @@ window.deletePhoto = async function(id) {
 // === PROFILE SYSTEM ===
 function createProfileModal() {
     if (document.getElementById('profileModal')) return;
-    // Добавлена дата регистрации
     const modalHTML = `
     <div id="profileModal" class="modal-overlay">
         <div class="modal-card">
@@ -321,12 +331,9 @@ function createProfileModal() {
                     <div class="stat-value" id="profStatus">Загрузка...</div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-label">В игре с</div>
+                    <div class="stat-label">Регистрация</div>
                     <div class="stat-value" style="font-family:monospace;" id="profDate">...</div>
                 </div>
-            </div>
-             <div class="profile-actions" style="justify-content:center; padding-top:0;">
-                <span style="font-size:0.7rem; color:#555;" id="profId">ID: ...</span>
             </div>
             <div class="profile-actions">
                 <button class="btn btn-logout" onclick="window.logout()"><i class="fas fa-sign-out-alt"></i> Выйти из аккаунта</button>
@@ -344,14 +351,12 @@ window.openProfile = function() {
     const avatar = document.getElementById('profAvatar');
     const name = document.getElementById('profName');
     const role = document.getElementById('profRole');
-    const id = document.getElementById('profId');
     const statusEl = document.getElementById('profStatus');
     const dateEl = document.getElementById('profDate');
 
     if (avatar) avatar.src = currentUser.user_metadata.avatar_url || DEFAULT_AVATAR;
     if (name) name.textContent = currentUser.user_metadata.full_name;
     if (role) role.textContent = isAdmin ? 'Administrator' : 'Player';
-    if (id) id.textContent = 'ID: ' + currentUser.id;
     
     // Форматируем дату регистрации
     if (dateEl && currentUser.created_at) {
