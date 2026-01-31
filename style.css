@@ -12,6 +12,9 @@
     --green: #10b981;
     --gold: #fbbf24;
     --cyan: #2dd4bf; 
+    --role-owner: #ef4444;
+    --role-dev: #06b6d4;
+    --role-admin: #f59e0b;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
@@ -261,26 +264,39 @@ body {
 .msg-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 0.75rem; color: #64748b; }
 .msg-author { font-weight: 700; color: #e2e8f0; }
 
-/* ADMIN TAGS IN CHAT */
-.admin-tag { 
-    background: linear-gradient(135deg, #ef4444, #b91c1c);
-    color: white; padding: 2px 6px; border-radius: 4px; 
+/* === IMPROVED ROLE BADGES === */
+.role-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 4px;
     font-size: 0.65rem; font-weight: 800;
-    box-shadow: 0 0 5px rgba(239, 68, 68, 0.5); margin-right: 4px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-right: 5px; line-height: 1.2;
 }
-.tag-owner {
-    background: linear-gradient(135deg, #ef4444, #7f1d1d);
-    color: white; padding: 2px 6px; border-radius: 4px; 
-    font-size: 0.65rem; font-weight: 800; border: 1px solid #ef4444; margin-right: 4px; letter-spacing: 1px;
+
+/* Owner: Red/Dark Red - Strong & Clean */
+.badge-owner {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
 }
-.tag-dev {
-    background: linear-gradient(135deg, #2dd4bf, #0f766e);
-    color: white; padding: 2px 6px; border-radius: 4px; 
-    font-size: 0.65rem; font-weight: 800; border: 1px solid #2dd4bf; margin-right: 4px; letter-spacing: 1px;
+
+/* Admin: Orange/Gold - Classic Admin color */
+.badge-admin {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
 }
+
+/* Dev: Cyan/Blue - Tech look */
+.badge-dev {
+    background: rgba(6, 182, 212, 0.15);
+    color: #22d3ee;
+    border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
 .banned-tag {
-    background: #333; color: #888; padding: 2px 6px; border-radius: 4px; 
-    font-size: 0.65rem; font-weight: 800; margin-left: 5px; border: 1px solid #555;
+    background: #1a1a1a; color: #666; padding: 2px 6px; border-radius: 4px; 
+    font-size: 0.65rem; font-weight: 800; margin-left: 5px; border: 1px solid #333;
 }
 
 /* CHAT ACTIONS (ADMIN) - FIXED VISIBILITY */
