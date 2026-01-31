@@ -9,38 +9,97 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Библиотека для 3D скинов -->
+    <script src="https://bs-community.github.io/skinview3d/js/skinview3d.bundle.js"></script>
     <link rel="stylesheet" href="style.css">
     <style>
-        .staff-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px; margin-top: 40px; }
+        .staff-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); 
+            gap: 40px; 
+            margin-top: 40px; 
+            justify-content: center;
+        }
+        
         .staff-card {
-            background: rgba(20, 20, 25, 0.6); border: 1px solid var(--border); border-radius: 20px;
-            overflow: hidden; text-align: center; transition: 0.3s; position: relative;
+            background: rgba(20, 20, 25, 0.8); 
+            border: 1px solid var(--border); 
+            border-radius: 20px;
+            overflow: hidden; 
+            text-align: center; 
+            transition: 0.3s; 
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
         }
-        .staff-card:hover { transform: translateY(-5px); border-color: var(--accent); box-shadow: 0 10px 30px rgba(139, 92, 246, 0.2); }
-        .staff-bg { height: 100px; background: linear-gradient(45deg, #1a1a1d, #2d2d33); position: relative; }
-        
-        /* ОБНОВЛЕННЫЙ СТИЛЬ АВАТАРОК */
-        .staff-avatar {
-            width: 100px; height: 100px; 
-            border-radius: 20px; /* Квадрат с закруглением */
-            border: 4px solid #141417;
-            margin: -50px auto 15px; 
-            background: #000; 
-            object-fit: contain; /* Чтобы голова влезала целиком */
-            position: relative; z-index: 2;
-            image-rendering: pixelated; /* Четкие пиксели */
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+
+        .staff-card:hover { 
+            border-color: var(--accent); 
+            box-shadow: 0 20px 50px rgba(139, 92, 246, 0.15); 
+            transform: translateY(-5px);
         }
-        
-        .staff-info { padding: 0 20px 30px; }
-        .staff-name { font-size: 1.4rem; font-weight: 800; color: white; margin-bottom: 5px; }
+
+        /* Контейнер для 3D модели */
+        .model-wrapper {
+            width: 100%;
+            height: 350px;
+            background: radial-gradient(circle at center, rgba(139, 92, 246, 0.15), transparent 70%);
+            position: relative;
+            cursor: move; /* Показываем, что можно крутить */
+        }
+
+        .staff-info { 
+            padding: 25px; 
+            background: rgba(10, 10, 12, 0.6);
+            border-top: 1px solid rgba(255,255,255,0.05);
+            flex-grow: 1;
+            z-index: 2;
+        }
+
+        .staff-name { 
+            font-size: 1.8rem; 
+            font-weight: 900; 
+            color: white; 
+            margin-bottom: 8px; 
+            letter-spacing: -0.5px;
+            text-shadow: 0 0 20px rgba(255,255,255,0.1);
+        }
+
         .staff-role { 
-            display: inline-block; padding: 4px 12px; border-radius: 20px; 
-            font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-bottom: 15px;
+            display: inline-block; 
+            padding: 6px 16px; 
+            border-radius: 50px; 
+            font-size: 0.8rem; 
+            font-weight: 700; 
+            text-transform: uppercase; 
+            margin-bottom: 20px;
+            letter-spacing: 1px;
         }
-        .role-owner { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
-        .role-admin { background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.3); }
-        .staff-desc { color: #94a3b8; font-size: 0.9rem; line-height: 1.5; }
+        
+        .role-owner { 
+            background: rgba(239, 68, 68, 0.15); 
+            color: #ef4444; 
+            border: 1px solid rgba(239, 68, 68, 0.4); 
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.1);
+        }
+
+        .staff-desc { 
+            color: #94a3b8; 
+            font-size: 0.95rem; 
+            line-height: 1.6; 
+        }
+
+        /* Декор за карточкой */
+        .card-decoration {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 1.5rem;
+            opacity: 0.3;
+            color: white;
+            z-index: 1;
+        }
     </style>
 </head>
 <body class="page-staff">
@@ -79,24 +138,27 @@
         <div class="staff-grid">
             <!-- SHARK -->
             <div class="staff-card">
-                <div class="staff-bg"></div>
-                <!-- Используем mc-heads.net для стабильности -->
-                <img src="https://mc-heads.net/avatar/X_x_shark_x_X/100" class="staff-avatar" alt="X_x_shark_x_X">
+                <i class="fas fa-code card-decoration"></i>
+                <!-- Контейнер для 3D Canvas -->
+                <div class="model-wrapper" id="skin-container-shark"></div>
+                
                 <div class="staff-info">
                     <div class="staff-name">X_x_shark_x_X</div>
                     <div class="staff-role role-owner">Основатель</div>
-                    <p class="staff-desc">Техническая часть, разработка сайта и стабильность работы сервера.</p>
+                    <p class="staff-desc">Технический администратор. Разработка сайта, настройка плагинов и защита сервера.</p>
                 </div>
             </div>
 
             <!-- LEYNAR -->
             <div class="staff-card">
-                <div class="staff-bg"></div>
-                <img src="https://mc-heads.net/avatar/Leynar_/100" class="staff-avatar" alt="Leynar_">
+                <i class="fas fa-crown card-decoration"></i>
+                <!-- Контейнер для 3D Canvas -->
+                <div class="model-wrapper" id="skin-container-leynar"></div>
+                
                 <div class="staff-info">
                     <div class="staff-name">Leynar_</div>
                     <div class="staff-role role-owner">Основатель</div>
-                    <p class="staff-desc">Куратор игрового процесса, экономика и управление комьюнити.</p>
+                    <p class="staff-desc">Главный куратор. Экономика, ивенты, лор и управление сообществом.</p>
                 </div>
             </div>
         </div>
@@ -107,5 +169,56 @@
         <p style="opacity: 0.5; font-size: 0.75rem; margin-top: 10px;">Not affiliated with Mojang AB.</p>
     </footer>
     <script src="script.js"></script>
+    
+    <!-- Скрипт инициализации 3D моделей -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            function initSkinViewer(containerId, username) {
+                const container = document.getElementById(containerId);
+                // Получаем размеры контейнера
+                const width = container.offsetWidth;
+                const height = container.offsetHeight;
+
+                const skinViewer = new skinview3d.SkinViewer({
+                    canvas: document.createElement("canvas"), // Создаем canvas динамически
+                    width: width,
+                    height: height,
+                    skin: `https://minotar.net/skin/${username}` // Берем текстуру скина
+                });
+
+                // Добавляем canvas в контейнер
+                container.appendChild(skinViewer.canvas);
+
+                // Настройки камеры (чтобы скин был виден хорошо)
+                skinViewer.camera.position.x = 20;
+                skinViewer.camera.position.y = 15;
+                skinViewer.camera.position.z = 40;
+                skinViewer.zoom = 0.9;
+
+                // Включаем анимацию "Idle" (дыхание)
+                skinViewer.animation = new skinview3d.IdleAnimation();
+                
+                // Включаем вращение мышкой
+                skinViewer.controls.enableRotate = true;
+                skinViewer.controls.enableZoom = true;
+                skinViewer.controls.enablePan = false;
+
+                // Медленное автоматическое вращение
+                skinViewer.autoRotate = true;
+                skinViewer.autoRotateSpeed = 0.5;
+
+                // Ресайз при изменении окна
+                window.addEventListener('resize', () => {
+                    skinViewer.width = container.offsetWidth;
+                    skinViewer.height = container.offsetHeight;
+                });
+            }
+
+            // Инициализация для обоих админов
+            // ВАЖНО: Ники должны быть точными как в Minecraft, чтобы текстура загрузилась
+            initSkinViewer("skin-container-shark", "X_x_shark_x_X");
+            initSkinViewer("skin-container-leynar", "Leynar_");
+        });
+    </script>
 </body>
 </html>
