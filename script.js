@@ -41,11 +41,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-async function login() {
+// DELCARE GLOBAL FUNCTIONS
+window.login = async function() {
     await sb.auth.signInWithOAuth({ provider: 'discord', options: { redirectTo: window.location.href } });
 }
 
-async function logout() {
+window.logout = async function() {
     await sb.auth.signOut();
     window.location.reload();
 }
@@ -70,11 +71,12 @@ function updateAuthUI() {
     const container = document.getElementById('authContainer');
     if (currentUser && container) {
         const meta = currentUser.user_metadata;
+        const safeName = meta.full_name.split('#')[0];
         // Кликабельный профиль
         container.innerHTML = `
-            <div class="auth-trigger" onclick="openProfile()">
+            <div class="auth-trigger" onclick="window.openProfile()">
                 <img src="${meta.avatar_url}" class="auth-avatar">
-                <span class="auth-name">${meta.full_name.split('#')[0]}</span>
+                <span class="auth-name">${safeName}</span>
                 ${isAdmin ? '<span style="color:#ef4444; font-size:1.2rem; line-height:0;">•</span>' : ''}
             </div>
         `;
@@ -94,12 +96,12 @@ function createProfileModal() {
                 <img src="" id="profAvatar" class="profile-avatar-xl">
                 <div id="profName" class="profile-name">Username</div>
                 <div id="profRole" class="profile-role">Player</div>
-                <button class="close-btn" onclick="closeModals()" style="position:absolute; top:20px; right:20px; color:white;">&times;</button>
+                <button class="close-btn" onclick="window.closeModals()" style="position:absolute; top:20px; right:20px; color:white;">&times;</button>
             </div>
             <div class="profile-stats">
                 <div class="stat-box">
                     <div class="stat-label">Статус Проходки</div>
-                    <div class="stat-value" id="profStatus">Проверка...</div>
+                    <div class="stat-value" id="profStatus">Загрузка...</div>
                 </div>
                 <div class="stat-box">
                     <div class="stat-label">ID Аккаунта</div>
@@ -107,32 +109,45 @@ function createProfileModal() {
                 </div>
             </div>
             <div class="profile-actions">
-                <button class="btn btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Выйти из аккаунта</button>
+                <button class="btn btn-logout" onclick="window.logout()"><i class="fas fa-sign-out-alt"></i> Выйти из аккаунта</button>
             </div>
         </div>
     </div>`;
     document.body.insertAdjacentHTML('beforeend', modalHTML);
 }
 
-function openProfile() {
+window.openProfile = function() {
     if (!currentUser) return;
-    document.getElementById('profAvatar').src = currentUser.user_metadata.avatar_url;
-    document.getElementById('profName').textContent = currentUser.user_metadata.full_name;
-    document.getElementById('profRole').textContent = isAdmin ? 'Administrator' : 'Player';
-    document.getElementById('profId').textContent = currentUser.id.slice(0, 13) + '...';
     
+    // Если по какой-то причине модалки нет, создаем заново
+    if (!document.getElementById('profileModal')) createProfileModal();
+    
+    const modal = document.getElementById('profileModal');
+    const avatar = document.getElementById('profAvatar');
+    const name = document.getElementById('profName');
+    const role = document.getElementById('profRole');
+    const id = document.getElementById('profId');
     const statusEl = document.getElementById('profStatus');
-    if (userStatus === 'active') {
-        statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Активен';
-        statusEl.className = 'stat-value status-active';
-    } else if (userStatus === 'banned') {
-        statusEl.innerHTML = '<i class="fas fa-ban"></i> Забанен';
-        statusEl.className = 'stat-value status-banned';
-    } else {
-        statusEl.innerHTML = '<i class="fas fa-times-circle"></i> Нет';
-        statusEl.className = 'stat-value status-none';
+
+    if (avatar) avatar.src = currentUser.user_metadata.avatar_url;
+    if (name) name.textContent = currentUser.user_metadata.full_name;
+    if (role) role.textContent = isAdmin ? 'Administrator' : 'Player';
+    if (id) id.textContent = currentUser.id.slice(0, 13) + '...';
+    
+    if (statusEl) {
+        if (userStatus === 'active') {
+            statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Активен';
+            statusEl.className = 'stat-value status-active';
+        } else if (userStatus === 'banned') {
+            statusEl.innerHTML = '<i class="fas fa-ban"></i> Забанен';
+            statusEl.className = 'stat-value status-banned';
+        } else {
+            statusEl.innerHTML = '<i class="fas fa-times-circle"></i> Нет';
+            statusEl.className = 'stat-value status-none';
+        }
     }
-    document.getElementById('profileModal').classList.add('active');
+    
+    modal.classList.add('active');
 }
 
 // === FORUM ===
@@ -152,10 +167,10 @@ async function loadTopics() {
     grid.innerHTML = data.map(topic => {
         const isOwner = currentUser && topic.author_id === currentUser.id;
         let actions = '';
-        if (isAdmin) actions += `<button class="post-btn delete" onclick="event.stopPropagation(); deleteTopic(${topic.id})"><i class="fas fa-trash"></i></button>`;
+        if (isAdmin) actions += `<button class="post-btn delete" onclick="event.stopPropagation(); window.deleteTopic(${topic.id})"><i class="fas fa-trash"></i></button>`;
         if (isAdmin || isOwner) {
             const isClosed = topic.is_closed === true;
-            actions += `<button class="post-btn lock" onclick="event.stopPropagation(); toggleTopicStatus(${topic.id}, ${isClosed})"><i class="fas ${isClosed ? 'fa-lock-open' : 'fa-lock'}"></i></button>`;
+            actions += `<button class="post-btn lock" onclick="event.stopPropagation(); window.toggleTopicStatus(${topic.id}, ${isClosed})"><i class="fas ${isClosed ? 'fa-lock-open' : 'fa-lock'}"></i></button>`;
         }
 
         const author = topic.users || { username: 'Неизвестный', avatar_url: '', role: 'user' };
@@ -163,7 +178,7 @@ async function loadTopics() {
         const closedLabel = topic.is_closed ? '<span class="closed-icon"><i class="fas fa-lock"></i></span>' : '';
 
         return `
-        <div class="post-entry ${topic.is_closed ? 'closed' : ''}" onclick="openTopic(${topic.id})">
+        <div class="post-entry ${topic.is_closed ? 'closed' : ''}" onclick="window.openTopic(${topic.id})">
             <div class="post-header">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <img src="${author.avatar_url || 'https://i.postimg.cc/Pf4nb7xV/logo.png'}" style="width:32px; height:32px; border-radius:50%;">
@@ -179,7 +194,7 @@ async function loadTopics() {
     `}).join('');
 }
 
-async function submitPost() {
+window.submitPost = async function() {
     if (!currentUser) return showToast('Нужен вход!', true);
     const title = document.getElementById('postTitle').value.trim();
     const content = document.getElementById('postContent').value.trim();
@@ -189,15 +204,15 @@ async function submitPost() {
     if (!error) { showToast('Тема создана!'); closeModals(); loadTopics(); }
 }
 
-async function deleteTopic(id) {
+window.deleteTopic = async function(id) {
     if (confirm('Удалить?')) { await sb.from('topics').delete().eq('id', id); loadTopics(); }
 }
-async function toggleTopicStatus(id, s) {
+window.toggleTopicStatus = async function(id, s) {
     await sb.from('topics').update({ is_closed: !s }).eq('id', id); loadTopics();
 }
 
 // === CHAT ===
-async function openTopic(topicId) {
+window.openTopic = async function(topicId) {
     currentTopicId = topicId;
     document.getElementById('topicModal').classList.add('active');
     const container = document.getElementById('chatContainer');
@@ -253,11 +268,11 @@ function renderMessage(user, text, date, isOp, opId) {
     </div>`;
 }
 
-async function submitComment() {
+window.submitComment = async function() {
     if (!currentUser || !currentTopicId) return;
     const input = document.getElementById('commentInput');
     const { error } = await sb.from('comments').insert([{ topic_id: currentTopicId, user_id: currentUser.id, content: input.value }]);
-    if (!error) { input.value = ''; openTopic(currentTopicId); }
+    if (!error) { input.value = ''; window.openTopic(currentTopicId); }
 }
 
 // === GALLERY ===
@@ -270,28 +285,28 @@ async function loadGallery() {
     grid.innerHTML = data.map(img => `
         <div class="gallery-card">
             <img src="${img.url}">
-            ${isAdmin ? `<button class="gallery-del-btn" onclick="deletePhoto(${img.id})">&times;</button>` : ''}
+            ${isAdmin ? `<button class="gallery-del-btn" onclick="window.deletePhoto(${img.id})">&times;</button>` : ''}
             <div style="position:absolute; bottom:0; left:0; width:100%; padding:10px; background:linear-gradient(to top, rgba(0,0,0,0.8), transparent); color:white; font-size:0.8rem;">${escapeHtml(img.title)}</div>
         </div>
     `).join('');
 }
-async function submitPhoto() {
+window.submitPhoto = async function() {
     const url = document.getElementById('photoUrl').value;
     const title = document.getElementById('photoDesc').value;
     if (url) await sb.from('gallery').insert([{ url, title, author_id: currentUser.id }]);
     closeModals(); loadGallery();
 }
-async function deletePhoto(id) { if(confirm('Удалить?')) { await sb.from('gallery').delete().eq('id', id); loadGallery(); } }
+window.deletePhoto = async function(id) { if(confirm('Удалить?')) { await sb.from('gallery').delete().eq('id', id); loadGallery(); } }
 
 // UTILS
-function closeModals() { document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active')); }
-function tryOpenModal(id) { document.getElementById(id).classList.add('active'); }
-function showToast(msg) { 
+window.closeModals = function() { document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active')); }
+window.tryOpenModal = function(id) { document.getElementById(id).classList.add('active'); }
+window.showToast = function(msg, isError) { 
     const t = document.getElementById('toast'); 
-    t.innerText = msg; t.classList.add('show'); 
+    t.innerText = msg; t.className = 'toast-box ' + (isError ? 'error show' : 'show'); 
     setTimeout(() => t.classList.remove('show'), 3000); 
 }
-function copyIp() { navigator.clipboard.writeText('play.vesperiasmp.ru'); showToast('IP скопирован!'); }
+window.copyIp = function() { navigator.clipboard.writeText('play.vesperiasmp.ru'); showToast('IP скопирован!'); }
 function escapeHtml(t) { return t ? t.replace(/&/g, "&amp;").replace(/</g, "&lt;") : ''; }
 window.onclick = (e) => { if (e.target.classList.contains('modal-overlay')) closeModals(); }
 
