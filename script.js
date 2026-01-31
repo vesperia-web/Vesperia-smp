@@ -8,7 +8,8 @@ const sb = supabase.createClient(SB_URL, SB_KEY);
 const DEFAULT_AVATAR = 'https://i.postimg.cc/Pf4nb7xV/logo.png';
 
 let currentUser = null;
-let isAdmin = false;
+let isAdmin = false; // Сохраняется для совместимости, но проверки теперь по currentUser.role
+let userRole = 'user'; // owner, developer, admin, user
 let userStatus = 'none'; // active (есть проходка), none (нет проходки)
 let isUserBanned = false; // true (забанен), false (нет)
 let currentTopicId = null;
@@ -17,6 +18,7 @@ let currentTopicId = null;
 window.addEventListener('DOMContentLoaded', async () => {
     initStars();
     initNavigation(); 
+    initRealtime();
     
     // Инициализация при первой загрузке
     handleRoute(window.location.pathname);
@@ -51,6 +53,26 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
     });
 });
+
+// === REALTIME (AUTO-REFRESH) ===
+function initRealtime() {
+    sb.channel('public:any')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'topics' }, payload => {
+        // Если мы на странице форума, обновляем список тем
+        if (window.location.pathname.includes('forum.html')) {
+            loadTopics();
+        }
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, payload => {
+        // Если открыт топик и комментарий относится к нему, обновляем чат
+        // Либо просто перегружаем чат если ID совпадает
+        if (currentTopicId && (payload.new.topic_id === currentTopicId || payload.old.topic_id === currentTopicId)) {
+            // Мягкое обновление, чтобы не сбивать скролл (в идеале), но пока просто релоад
+            openTopic(currentTopicId, true);
+        }
+    })
+    .subscribe();
+}
 
 // === SPA NAVIGATION ===
 function initNavigation() {
@@ -138,59 +160,56 @@ function handleRoute(url) {
     else if (url.includes('gallery.html')) loadGallery();
     else if (url.includes('staff.html')) {
         loadActiveMembers();
-        setTimeout(initStaffSkins, 100);
+        // Запуск скинов для админов
+        setTimeout(() => {
+            initSkinViewer("skin-container-shark", "X_x_shark_x_X", false);
+            initSkinViewer("skin-container-leynar", "Leynar_", false);
+        }, 300);
     }
     updateAuthUI();
 }
 
 // 3D SKINS LOGIC (Moved from HTML to JS)
-function initStaffSkins() {
+window.initSkinViewer = function(containerId, username, checkSkin) {
     if (typeof skinview3d === 'undefined') return;
 
-    function renderSkin(containerId, username, checkSkin) {
-        const container = document.getElementById(containerId);
-        if(!container) return;
-        container.innerHTML = ''; // очистка
-        
-        const width = container.offsetWidth;
-        const height = container.offsetHeight;
-        const DEFAULT_SKIN = 'https://minotar.net/skin/DripBlue_';
-        const TARGET_SKIN = `https://minotar.net/skin/${username}`;
-        
-        const startSkin = checkSkin ? DEFAULT_SKIN : TARGET_SKIN;
-
-        const skinViewer = new skinview3d.SkinViewer({
-            canvas: document.createElement("canvas"),
-            width: width,
-            height: height,
-            skin: startSkin
-        });
-
-        container.appendChild(skinViewer.canvas);
-
-        skinViewer.camera.position.x = 20;
-        skinViewer.camera.position.y = 15;
-        skinViewer.camera.position.z = 40;
-        skinViewer.zoom = 0.9;
-        skinViewer.animation = new skinview3d.IdleAnimation();
-        skinViewer.controls.enableRotate = true;
-        skinViewer.controls.enableZoom = true;
-
-        if (checkSkin) {
-            // Проверка на лицензию (примерная)
-            fetch(`https://api.ashcon.app/mojang/v2/user/${username}`)
-                .then(r => r.ok ? r.json() : null)
-                .then(data => {
-                    if (data && data.textures && data.textures.custom) skinViewer.loadSkin(TARGET_SKIN);
-                }).catch(()=>{});
-        }
-    }
-
-    renderSkin("skin-container-shark", "X_x_shark_x_X", false);
-    renderSkin("skin-container-leynar", "Leynar_", false);
+    const container = document.getElementById(containerId);
+    if(!container) return;
     
-    // Для участников в loadActiveMembers вызывается initSkinViewer (глобальная)
-    window.initSkinViewer = renderSkin;
+    container.innerHTML = ''; // очистка
+    
+    const width = container.offsetWidth;
+    const height = container.offsetHeight;
+    const DEFAULT_SKIN = 'https://minotar.net/skin/DripBlue_';
+    const TARGET_SKIN = `https://minotar.net/skin/${username}`;
+    
+    const startSkin = checkSkin ? DEFAULT_SKIN : TARGET_SKIN;
+
+    const skinViewer = new skinview3d.SkinViewer({
+        canvas: document.createElement("canvas"),
+        width: width,
+        height: height,
+        skin: startSkin
+    });
+
+    container.appendChild(skinViewer.canvas);
+
+    skinViewer.camera.position.x = 20;
+    skinViewer.camera.position.y = 15;
+    skinViewer.camera.position.z = 40;
+    skinViewer.zoom = 0.9;
+    skinViewer.animation = new skinview3d.IdleAnimation();
+    skinViewer.controls.enableRotate = true;
+    skinViewer.controls.enableZoom = true;
+
+    if (checkSkin) {
+        // Проверка на лицензию (примерная)
+        fetch(`https://api.ashcon.app/mojang/v2/user/${username}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (data && data.textures && data.textures.custom) skinViewer.loadSkin(TARGET_SKIN);
+            }).catch(()=>{});
+    }
 }
 
 window.onpopstate = () => { window.location.reload(); };
@@ -216,8 +235,12 @@ async function syncUserProfile() {
         }, { onConflict: 'id' }).select('role, status, is_banned').single();
 
         if (data) {
-            if (data.role === 'admin') isAdmin = true;
+            userRole = data.role || 'user';
+            if (['admin', 'owner', 'developer'].includes(userRole)) isAdmin = true;
+            else isAdmin = false;
+
             if (data.status) userStatus = data.status;
+            
             // Безопасное чтение is_banned (если колонки еще нет, будет undefined, считаем false)
             isUserBanned = data.is_banned === true; 
         }
@@ -229,13 +252,17 @@ function updateAuthUI() {
     if (currentUser && container) {
         const meta = currentUser.user_metadata;
         const safeName = meta.full_name.split('#')[0];
-        const adminDot = isAdmin ? '<span style="color:#ef4444; font-size:1.2rem; line-height:0; margin-left:4px;">•</span>' : '';
         
+        let badge = '';
+        if (userRole === 'owner') badge = '<span style="color:#ef4444; font-size:1.2rem; margin-left:4px;">👑</span>';
+        else if (userRole === 'developer') badge = '<span style="color:#2dd4bf; font-size:1.2rem; margin-left:4px;">🛠</span>';
+        else if (isAdmin) badge = '<span style="color:#ef4444; font-size:1.2rem; line-height:0; margin-left:4px;">•</span>';
+
         container.innerHTML = `
             <div class="auth-trigger" onclick="window.toggleProfile()">
                 <img src="${meta.avatar_url || DEFAULT_AVATAR}" class="auth-avatar">
                 <span class="auth-name">${safeName}</span>
-                ${adminDot}
+                ${badge}
             </div>
         `;
         createProfileDropdown(meta, safeName);
@@ -260,6 +287,11 @@ function createProfileDropdown(meta, name) {
         if (userStatus === 'active') statusHTML = '<span class="d-val status-active">Активен</span>';
     }
     
+    let roleName = 'PLAYER';
+    if(userRole === 'owner') roleName = 'OWNER';
+    if(userRole === 'developer') roleName = 'DEVELOPER';
+    if(userRole === 'admin') roleName = 'ADMINISTRATOR';
+
     const d = new Date(currentUser.created_at);
     const dateStr = d.toLocaleDateString('ru-RU');
     
@@ -269,7 +301,7 @@ function createProfileDropdown(meta, name) {
             <img src="${meta.avatar_url || DEFAULT_AVATAR}" class="dropdown-avatar">
             <div class="dropdown-user-info">
                 <div class="dropdown-name">${name}</div>
-                <div class="dropdown-role">${isAdmin ? 'ADMINISTRATOR' : 'PLAYER'}</div>
+                <div class="dropdown-role">${roleName}</div>
             </div>
         </div>
         <div class="dropdown-stats">
@@ -348,6 +380,7 @@ window.loadActiveMembers = async function() {
         `;
         grid.insertAdjacentHTML('beforeend', cardHTML);
         
+        // Инициализация скина
         if (window.initSkinViewer) {
             setTimeout(() => window.initSkinViewer(uniqueId, member.username, true), 100);
         }
@@ -367,6 +400,7 @@ window.submitActiveMember = async function() {
     if (!error) {
         showToast('Участник добавлен!');
         closeModals();
+        // loadActiveMembers() вызовется через Realtime или можно вызвать вручную
         loadActiveMembers();
         document.getElementById('memberNick').value = '';
         document.getElementById('memberDesc').value = '';
@@ -424,7 +458,13 @@ async function loadTopics() {
         const author = topic.users || {};
         const authorName = author.username || 'Неизвестный';
         const authorAva = author.avatar_url || DEFAULT_AVATAR;
-        const adminTag = (author.role === 'admin') ? '<span class="admin-tag">ADMIN</span> ' : '';
+        
+        // РОЛИ
+        let roleTag = '';
+        if (author.role === 'owner') roleTag = '<span class="tag-owner">OWNER</span> ';
+        else if (author.role === 'developer') roleTag = '<span class="tag-dev">DEV</span> ';
+        else if (author.role === 'admin') roleTag = '<span class="admin-tag">ADMIN</span> ';
+        
         const bannedTag = (author.is_banned === true) ? '<span class="banned-tag">BANNED</span> ' : '';
         const closedLabel = topic.is_closed ? '<span class="closed-icon"><i class="fas fa-lock"></i></span>' : '';
 
@@ -435,7 +475,7 @@ async function loadTopics() {
                     <img src="${authorAva}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
                     <div style="display:flex; flex-direction:column; overflow:hidden;">
                         <span class="post-title">${escapeHtml(topic.title)} ${closedLabel}</span>
-                        <span class="post-meta">${adminTag}${bannedTag}${escapeHtml(authorName)} • ${new Date(topic.created_at).toLocaleDateString()}</span>
+                        <span class="post-meta">${roleTag}${bannedTag}${escapeHtml(authorName)} • ${new Date(topic.created_at).toLocaleDateString()}</span>
                     </div>
                 </div>
                 <div class="topic-actions">${actions}</div>
@@ -446,6 +486,7 @@ async function loadTopics() {
 }
 
 window.submitPost = async function() {
+    await syncUserProfile(); // Обновляем статус перед проверкой
     if (!currentUser) return showToast('Нужен вход!', true);
     if (isUserBanned) return showToast('Вы забанены и не можете создавать темы!', true);
     
@@ -454,25 +495,26 @@ window.submitPost = async function() {
     if (!title || !content) return showToast('Заполните поля!', true);
 
     const { error } = await sb.from('topics').insert([{ title, description: content, author_id: currentUser.id }]);
-    if (!error) { showToast('Тема создана!'); closeModals(); loadTopics(); }
+    if (!error) { showToast('Тема создана!'); closeModals(); } // loadTopics сработает по Realtime
     else showToast(error.message, true);
 }
 
 window.deleteTopic = async function(id) {
     if (!isAdmin) return showToast('Только для админов!', true);
-    if (confirm('Удалить тему навсегда?')) { await sb.from('topics').delete().eq('id', id); loadTopics(); }
+    if (confirm('Удалить тему навсегда?')) { await sb.from('topics').delete().eq('id', id); }
 }
 
 window.toggleTopicStatus = async function(id, s) {
-    await sb.from('topics').update({ is_closed: !s }).eq('id', id); loadTopics();
+    await sb.from('topics').update({ is_closed: !s }).eq('id', id);
 }
 
 // === CHAT ===
-window.openTopic = async function(topicId) {
+window.openTopic = async function(topicId, isReload = false) {
     currentTopicId = topicId;
-    document.getElementById('topicModal').classList.add('active');
+    if(!isReload) document.getElementById('topicModal').classList.add('active');
+    
     const container = document.getElementById('chatContainer');
-    container.innerHTML = '<div class="loading-state">Загрузка...</div>';
+    if(!isReload) container.innerHTML = '<div class="loading-state">Загрузка...</div>';
     
     // ИСПРАВЛЕНИЕ: Добавлен запрос поля 'id'
     const { data: topic } = await sb.from('topics')
@@ -488,15 +530,30 @@ window.openTopic = async function(topicId) {
     const inputArea = document.querySelector('.chat-input-area');
     let closedMsg = document.getElementById('closedMsg');
     
-    if (topic.is_closed) {
+    // ЛОГИКА ОТОБРАЖЕНИЯ ВВОДА
+    // 1. Если забанен -> "Вы забанены"
+    // 2. Если тема закрыта -> "Тема закрыта"
+    // 3. Иначе -> инпут
+    
+    if (isUserBanned) {
         inputArea.style.display = 'none';
         if (!closedMsg) {
             closedMsg = document.createElement('div');
             closedMsg.id = 'closedMsg';
             closedMsg.className = 'chat-closed-msg';
-            closedMsg.innerHTML = '<i class="fas fa-lock"></i> Тема закрыта для новых ответов.';
             inputArea.parentNode.insertBefore(closedMsg, inputArea);
         }
+        closedMsg.innerHTML = '<i class="fas fa-ban"></i> Вы забанены и не можете писать.';
+        closedMsg.style.display = 'block';
+    } else if (topic.is_closed) {
+        inputArea.style.display = 'none';
+        if (!closedMsg) {
+            closedMsg = document.createElement('div');
+            closedMsg.id = 'closedMsg';
+            closedMsg.className = 'chat-closed-msg';
+            inputArea.parentNode.insertBefore(closedMsg, inputArea);
+        }
+        closedMsg.innerHTML = '<i class="fas fa-lock"></i> Тема закрыта для новых ответов.';
         closedMsg.style.display = 'block';
     } else {
         inputArea.style.display = 'flex';
@@ -517,7 +574,10 @@ window.openTopic = async function(topicId) {
     }
     
     container.innerHTML = html;
-    container.scrollTop = container.scrollHeight;
+    // Если это перезагрузка (realtime), скроллим только если были внизу, но тут для простоты скроллим всегда вниз
+    if(!isReload || (container.scrollHeight - container.scrollTop === container.clientHeight)) {
+        container.scrollTop = container.scrollHeight;
+    }
 }
 
 function renderMessage(user, text, date, isOpPost, opId, commentId) {
@@ -525,10 +585,14 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
     const isMe = currentUser && safeUser.id === currentUser.id;
     const isTopicAuthor = (user && user.id === opId) || isOpPost; 
     
-    const isAdminUser = safeUser.role === 'admin';
     const isTargetBanned = safeUser.is_banned === true;
 
-    const adminTagHTML = isAdminUser ? '<span class="admin-tag">ADMIN</span> ' : '';
+    // РОЛИ
+    let roleTag = '';
+    if (safeUser.role === 'owner') roleTag = '<span class="tag-owner">OWNER</span> ';
+    else if (safeUser.role === 'developer') roleTag = '<span class="tag-dev">DEV</span> ';
+    else if (safeUser.role === 'admin') roleTag = '<span class="admin-tag">ADMIN</span> ';
+    
     const bannedTagHTML = isTargetBanned ? '<span class="banned-tag">BANNED</span> ' : '';
     const crownHTML = (isTopicAuthor && !isOpPost) ? '<i class="fas fa-crown" style="color:#fbbf24; margin-left:5px;" title="Автор темы"></i>' : '';
     
@@ -537,8 +601,8 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
         const delBtn = (commentId) ? `<button class="chat-action-btn btn-chat-del" onclick="window.deleteComment(${commentId})" title="Удалить"><i class="fas fa-trash"></i></button>` : '';
         let banBtn = '';
         if (!isMe) {
-            // ЛОГИКА ПЕРЕКЛЮЧЕНИЯ КНОПКИ теперь зависит от is_banned
-            if (isTargetBanned) {
+            // ИСПРАВЛЕННАЯ ЛОГИКА: Явная проверка на true
+            if (isTargetBanned === true) {
                 banBtn = `<button class="chat-action-btn btn-chat-unban" onclick="window.banUser('${safeUser.id}', false)" title="Разбанить"><i class="fas fa-user-check"></i></button>`;
             } else {
                 banBtn = `<button class="chat-action-btn btn-chat-ban" onclick="window.banUser('${safeUser.id}', true)" title="Забанить"><i class="fas fa-gavel"></i></button>`;
@@ -557,7 +621,7 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
         ${!isMe ? `<img src="${safeUser.avatar_url || DEFAULT_AVATAR}" class="msg-avatar">` : ''}
         <div class="msg-content">
             <div class="msg-header">
-                ${adminTagHTML}${bannedTagHTML} ${isMe ? 'Вы' : safeUser.username} 
+                ${roleTag}${bannedTagHTML} ${isMe ? 'Вы' : safeUser.username} 
                 ${crownHTML}
                 <span style="opacity:0.5; font-size:0.7em; margin-left:5px">${new Date(date).toLocaleTimeString().slice(0,5)}</span>
                 ${adminActions}
@@ -570,6 +634,7 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
 }
 
 window.submitComment = async function() {
+    await syncUserProfile(); // Обновление перед отправкой
     if (!currentUser || !currentTopicId) return;
     if (isUserBanned) return showToast('Вы забанены и не можете писать!', true);
 
@@ -585,7 +650,7 @@ window.submitComment = async function() {
 
     if (!error) { 
         input.value = ''; 
-        window.openTopic(currentTopicId); 
+        // Realtime обновит чат, но можно и принудительно
     } else {
         showToast('Ошибка: ' + error.message, true);
     }
@@ -596,12 +661,7 @@ window.deleteComment = async function(commentId) {
     if (!isAdmin) return;
     if (confirm('Удалить этот комментарий?')) {
         const { error } = await sb.from('comments').delete().eq('id', commentId);
-        if (!error) {
-            showToast('Комментарий удален');
-            window.openTopic(currentTopicId); 
-        } else {
-            showToast('Ошибка: ' + error.message, true);
-        }
+        if (error) showToast('Ошибка: ' + error.message, true);
     }
 }
 
@@ -616,7 +676,8 @@ window.banUser = async function(userId, shouldBan) {
         const { error } = await sb.from('users').update({ is_banned: shouldBan }).eq('id', userId);
         if (!error) {
             showToast(`Пользователь ${shouldBan ? 'забанен' : 'разбанен'}`);
-            if (currentTopicId) window.openTopic(currentTopicId);
+            // Обновляем текущий топик чтобы перерисовалась кнопка у сообщений этого юзера
+            if (currentTopicId) openTopic(currentTopicId, true);
         } else {
             showToast('Ошибка: ' + error.message, true);
         }
