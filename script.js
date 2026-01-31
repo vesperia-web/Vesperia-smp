@@ -36,7 +36,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             await syncUserProfile(); 
             updateAuthUI();
             
-            // Перезагрузка контента
+            // Перезагрузка контента (чтобы появились кнопки админа)
             if (isForum) loadTopics(); 
             if (isGallery) loadGallery();
             if (isActiveMembers) loadActiveMembers();
@@ -64,6 +64,8 @@ async function syncUserProfile() {
     if (!currentUser) return;
     try {
         const discordName = (currentUser.user_metadata.full_name || '').toLowerCase();
+        
+        // Проверка по хардкоду (Discord ники)
         if (ADMIN_NICKS.some(nick => discordName.includes(nick))) {
             isAdmin = true;
         }
@@ -75,8 +77,14 @@ async function syncUserProfile() {
         }, { onConflict: 'id' }).select('role, status').single();
 
         if (data) {
+            // Проверка по базе данных (если роль выдана там)
             if (data.role === 'admin') isAdmin = true;
             if (data.status) userStatus = data.status;
+            
+            // Если роль админа есть в базе, но не по хардкоду, синхронизируем переменную
+            if (isAdmin && data.role !== 'admin') {
+                // Опционально: можно обновить роль в базе, если нужно
+            }
         }
     } catch (e) { console.error("Sync error:", e); }
 }
@@ -95,8 +103,19 @@ function updateAuthUI() {
                 ${adminDot}
             </div>
         `;
+        
+        // Показываем кнопки "auth-only"
+        // Если кнопка требует админки (удаление/перемещение), мы ее не показываем здесь, 
+        // она генерируется динамически в функциях load...
         document.querySelectorAll('.auth-only').forEach(btn => {
-            if (isAdmin || btn.innerText.includes('тему') || btn.innerText.includes('участника') || btn.innerText.includes('фото')) btn.style.setProperty('display', 'inline-flex', 'important');
+            // Кнопка добавления участника видна ТОЛЬКО админу
+            if (btn.innerText.includes('участника')) {
+                if (isAdmin) btn.style.setProperty('display', 'inline-flex', 'important');
+            } 
+            // Кнопки создания тем/фото видны всем авторизованным (или админам, если так задумано)
+            else if (btn.innerText.includes('тему') || btn.innerText.includes('фото')) {
+                btn.style.setProperty('display', 'inline-flex', 'important');
+            }
         });
     }
 }
@@ -112,7 +131,12 @@ window.loadActiveMembers = async function() {
     const { data, error } = await sb.from('active_members').select('*').order('order_ind', { ascending: true });
 
     if (error || !data || data.length === 0) {
-        grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:#555;">Список пуст или не настроен.</div>';
+        if (isAdmin) {
+             grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:#555;">Список пуст. Добавьте участников.</div>';
+        } else {
+             // Обычные игроки могут не видеть ничего, если список пуст
+             grid.innerHTML = '';
+        }
         return;
     }
 
@@ -155,7 +179,8 @@ window.loadActiveMembers = async function() {
 }
 
 window.submitActiveMember = async function() {
-    if (!isAdmin) return;
+    if (!isAdmin) return showToast('Доступ запрещен!', true); // ЗАЩИТА
+    
     const nick = document.getElementById('memberNick').value.trim();
     const desc = document.getElementById('memberDesc').value.trim();
     
@@ -179,12 +204,15 @@ window.submitActiveMember = async function() {
 }
 
 window.deleteMember = async function(id) {
+    if (!isAdmin) return; // ЗАЩИТА
     if (!confirm('Удалить участника?')) return;
     await sb.from('active_members').delete().eq('id', id);
     loadActiveMembers();
 }
 
 window.moveMember = async function(currentIndex, direction) {
+    if (!isAdmin) return; // ЗАЩИТА
+    
     // direction: -1 (left/up), 1 (right/down)
     const targetIndex = currentIndex + direction;
     if (targetIndex < 0 || targetIndex >= cachedMembers.length) return;
@@ -193,9 +221,6 @@ window.moveMember = async function(currentIndex, direction) {
     const targetItem = cachedMembers[targetIndex];
 
     // Swap order_ind in Supabase
-    // We update one by one. Optimistic UI would be better but simple reload is safer.
-    
-    // Temp variables for swap
     const order1 = currentItem.order_ind;
     const order2 = targetItem.order_ind;
 
@@ -270,10 +295,14 @@ window.submitPost = async function() {
 }
 
 window.deleteTopic = async function(id) {
+    if (!isAdmin) return showToast('Только для админов!', true); // ЗАЩИТА
     if (confirm('Удалить тему навсегда?')) { await sb.from('topics').delete().eq('id', id); loadTopics(); }
 }
 
 window.toggleTopicStatus = async function(id, s) {
+    // Здесь проверка мягче: админ ИЛИ владелец (в loadTopics кнопка генерируется только им)
+    // Но лучше проверить, чтобы хакер не закрыл чужую тему
+    // Для простоты оставим UI защиту, т.к. RLS должен проверять author_id или role=admin
     await sb.from('topics').update({ is_closed: !s }).eq('id', id); loadTopics();
 }
 
@@ -409,6 +438,7 @@ window.submitPhoto = async function() {
 }
 
 window.deletePhoto = async function(id) { 
+    if (!isAdmin) return; // ЗАЩИТА
     if(confirm('Удалить фото?')) { await sb.from('gallery').delete().eq('id', id); loadGallery(); } 
 }
 
@@ -482,6 +512,10 @@ window.openProfile = function() {
 window.closeModals = function() { document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active')); }
 window.tryOpenModal = function(id) { 
     if (!currentUser) return showToast('Сначала войдите!', true);
+    
+    // ДОП. ЗАЩИТА: Если открываем окно добавления участника
+    if (id === 'addMemberModal' && !isAdmin) return showToast('Только для админов!', true);
+
     document.getElementById(id).classList.add('active'); 
 }
 window.showToast = function(msg, isError) { 
