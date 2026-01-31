@@ -150,7 +150,7 @@ function createProfileDropdown(meta, name) {
         </div>
         <div class="dropdown-stats">
             <div class="d-stat">
-                <div class="d-label">Статус</div>
+                <div class="d-label">Проходка</div>
                 ${statusHTML}
             </div>
             <div style="width:1px; background:rgba(255,255,255,0.1);"></div>
@@ -424,15 +424,16 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
     
     // КНОПКИ АДМИНА
     let adminActions = '';
-    // Показываем кнопки, если я админ, и это сообщение не моё (хотя удалить своё я тоже могу, но бан не нужен)
-    // Разрешаем удалять все сообщения, но банить только чужих и не админов
+    
+    // ЛОГИКА: Админ может удалять любые сообщения и банить любых игроков (кроме себя)
+    // Раньше была проверка && !isAdminUser, теперь мы ее убрали, чтобы можно было банить и других админов
     if (isAdmin) {
-        // Удалить можно любое сообщение (кроме поста темы, если так решено, но тут commentId=null для поста)
+        // Удалить
         const delBtn = (commentId) ? `<button class="chat-action-btn btn-chat-del" onclick="window.deleteComment(${commentId})" title="Удалить сообщение"><i class="fas fa-trash"></i></button>` : '';
         
-        // Банить можно только не себя и не админов
+        // Забанить (можно всех, кроме себя)
         let banBtn = '';
-        if (!isMe && !isAdminUser) {
+        if (!isMe) {
             const banBtnText = isBanned ? '<i class="fas fa-user-check"></i>' : '<i class="fas fa-gavel"></i>';
             const banBtnTitle = isBanned ? 'Разбанить' : 'Забанить';
             banBtn = `<button class="chat-action-btn btn-chat-ban" onclick="window.banUser('${safeUser.id}', ${!isBanned})" title="${banBtnTitle}">${banBtnText}</button>`;
