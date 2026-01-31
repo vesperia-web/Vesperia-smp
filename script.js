@@ -22,9 +22,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     // 1. ЗАГРУЗКА КОНТЕНТА
     const isForum = document.getElementById('postsGrid');
     const isGallery = document.getElementById('galleryGrid');
+    const isActiveMembers = document.getElementById('activeMembersGrid');
 
     if (isForum) loadTopics();
     if (isGallery) loadGallery();
+    if (isActiveMembers) loadActiveMembers();
 
     // 2. АВТОРИЗАЦИЯ
     try {
@@ -34,9 +36,10 @@ window.addEventListener('DOMContentLoaded', async () => {
             await syncUserProfile(); 
             updateAuthUI();
             
-            // Перезагрузка контента, чтобы появились кнопки админа
+            // Перезагрузка контента
             if (isForum) loadTopics(); 
             if (isGallery) loadGallery();
+            if (isActiveMembers) loadActiveMembers();
         }
     } catch (e) { console.error("Auth error:", e); }
 
@@ -60,18 +63,11 @@ window.logout = async function() {
 async function syncUserProfile() {
     if (!currentUser) return;
     try {
-        // --- ADMIN BACKDOOR ---
-        // Проверяем, есть ли ник пользователя в списке админов
         const discordName = (currentUser.user_metadata.full_name || '').toLowerCase();
-        
-        // Проверка: содержится ли discordName в списке разрешенных (или наоборот)
-        // Для простоты ищем частичное совпадение
         if (ADMIN_NICKS.some(nick => discordName.includes(nick))) {
             isAdmin = true;
         }
-        // -------------------------------
 
-        // Обновляем данные пользователя
         const { data } = await sb.from('users').upsert({
             id: currentUser.id,
             username: currentUser.user_metadata.full_name,
@@ -100,9 +96,113 @@ function updateAuthUI() {
             </div>
         `;
         document.querySelectorAll('.auth-only').forEach(btn => {
-            if (isAdmin || btn.innerText.includes('тему')) btn.style.setProperty('display', 'inline-flex', 'important');
+            if (isAdmin || btn.innerText.includes('тему') || btn.innerText.includes('участника') || btn.innerText.includes('фото')) btn.style.setProperty('display', 'inline-flex', 'important');
         });
     }
+}
+
+// === ACTIVE MEMBERS LOGIC ===
+let cachedMembers = [];
+
+window.loadActiveMembers = async function() {
+    const grid = document.getElementById('activeMembersGrid');
+    if (!grid) return;
+
+    // Предполагаем, что таблица active_members существует: id, username, description, order_ind
+    const { data, error } = await sb.from('active_members').select('*').order('order_ind', { ascending: true });
+
+    if (error || !data || data.length === 0) {
+        grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:#555;">Список пуст или не настроен.</div>';
+        return;
+    }
+
+    cachedMembers = data;
+    grid.innerHTML = ''; // Clear
+
+    data.forEach((member, index) => {
+        const uniqueId = `skin-dyn-${member.id}`;
+        
+        let adminControls = '';
+        if (isAdmin) {
+            adminControls = `
+            <div class="staff-admin-controls">
+                ${index > 0 ? `<button class="staff-control-btn" onclick="moveMember(${index}, -1)"><i class="fas fa-chevron-left"></i></button>` : ''}
+                ${index < data.length - 1 ? `<button class="staff-control-btn" onclick="moveMember(${index}, 1)"><i class="fas fa-chevron-right"></i></button>` : ''}
+                <button class="staff-control-btn delete" onclick="deleteMember(${member.id})"><i class="fas fa-trash"></i></button>
+            </div>
+            `;
+        }
+
+        const cardHTML = `
+            <div class="staff-card">
+                ${adminControls}
+                <div class="model-wrapper" id="${uniqueId}"></div>
+                <div class="staff-info">
+                    <div class="staff-name">${escapeHtml(member.username)}</div>
+                    <div class="staff-role role-active">Участник</div>
+                    <div class="staff-desc">${escapeHtml(member.description || '')}</div>
+                </div>
+            </div>
+        `;
+        grid.insertAdjacentHTML('beforeend', cardHTML);
+        
+        // Init 3D Viewer if the global function exists
+        if (window.initSkinViewer) {
+            // Небольшая задержка, чтобы DOM обновился
+            setTimeout(() => window.initSkinViewer(uniqueId, member.username), 100);
+        }
+    });
+}
+
+window.submitActiveMember = async function() {
+    if (!isAdmin) return;
+    const nick = document.getElementById('memberNick').value.trim();
+    const desc = document.getElementById('memberDesc').value.trim();
+    
+    if (!nick) return showToast('Введите ник!', true);
+
+    // Get max order index
+    const { data: maxData } = await sb.from('active_members').select('order_ind').order('order_ind', { ascending: false }).limit(1);
+    const nextOrder = (maxData && maxData.length > 0) ? maxData[0].order_ind + 1 : 1;
+
+    const { error } = await sb.from('active_members').insert([{ username: nick, description: desc, order_ind: nextOrder }]);
+
+    if (!error) {
+        showToast('Участник добавлен!');
+        closeModals();
+        loadActiveMembers();
+        document.getElementById('memberNick').value = '';
+        document.getElementById('memberDesc').value = '';
+    } else {
+        showToast('Ошибка базы: ' + error.message, true);
+    }
+}
+
+window.deleteMember = async function(id) {
+    if (!confirm('Удалить участника?')) return;
+    await sb.from('active_members').delete().eq('id', id);
+    loadActiveMembers();
+}
+
+window.moveMember = async function(currentIndex, direction) {
+    // direction: -1 (left/up), 1 (right/down)
+    const targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= cachedMembers.length) return;
+
+    const currentItem = cachedMembers[currentIndex];
+    const targetItem = cachedMembers[targetIndex];
+
+    // Swap order_ind in Supabase
+    // We update one by one. Optimistic UI would be better but simple reload is safer.
+    
+    // Temp variables for swap
+    const order1 = currentItem.order_ind;
+    const order2 = targetItem.order_ind;
+
+    await sb.from('active_members').update({ order_ind: order2 }).eq('id', currentItem.id);
+    await sb.from('active_members').update({ order_ind: order1 }).eq('id', targetItem.id);
+
+    loadActiveMembers();
 }
 
 // === FORUM ===
@@ -136,11 +236,7 @@ async function loadTopics() {
         const authorName = author.username || 'Неизвестный';
         const authorAva = author.avatar_url || DEFAULT_AVATAR;
         
-        // VISUAL PREFIX LOGIC FOR TOPICS
         const authorNameLower = authorName.toLowerCase();
-        // Здесь тоже проверяем по discord-никам, но для визуала это не идеально, 
-        // так как в базе хранятся ники, с которыми зашли. 
-        // Но пока оставим логику как есть, она сработает если пользователь зашел.
         const isHardcodedAdmin = ADMIN_NICKS.some(nick => authorNameLower.includes(nick));
         const adminTag = (author.role === 'admin' || isHardcodedAdmin) ? '<span class="admin-tag">ADMIN</span> ' : '';
         const closedLabel = topic.is_closed ? '<span class="closed-icon"><i class="fas fa-lock"></i></span>' : '';
@@ -361,7 +457,6 @@ window.openProfile = function() {
     if (name) name.textContent = currentUser.user_metadata.full_name;
     if (role) role.textContent = isAdmin ? 'Administrator' : 'Player';
     
-    // Форматируем дату регистрации
     if (dateEl && currentUser.created_at) {
         const d = new Date(currentUser.created_at);
         dateEl.textContent = d.toLocaleDateString('ru-RU');
