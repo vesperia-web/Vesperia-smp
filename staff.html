@@ -9,8 +9,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Библиотека для 3D скинов -->
-    <script src="https://bs-community.github.io/skinview3d/js/skinview3d.bundle.js"></script>
     <link rel="stylesheet" href="style.css">
     <style>
         .staff-grid { 
@@ -194,76 +192,5 @@
         <p style="opacity: 0.5; font-size: 0.75rem; margin-top: 10px;">Not affiliated with Mojang AB.</p>
     </footer>
     <script src="script.js"></script>
-    
-    <!-- Скрипт инициализации 3D моделей -->
-    <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            // Третий параметр checkSkin
-            window.initSkinViewer = function(containerId, username, checkSkin = false) {
-                const container = document.getElementById(containerId);
-                if(!container) return;
-                
-                container.innerHTML = '';
-                const width = container.offsetWidth;
-                const height = container.offsetHeight;
-
-                // ЛОГИКА:
-                // Если checkSkin = true (обычный участник), мы сначала ставим DripBlue_.
-                // Если checkSkin = false (админ), мы сразу верим, что ник правильный.
-                
-                const DEFAULT_SKIN = 'https://minotar.net/skin/DripBlue_';
-                const TARGET_SKIN = `https://minotar.net/skin/${username}`;
-                
-                const startSkin = checkSkin ? DEFAULT_SKIN : TARGET_SKIN;
-
-                const skinViewer = new skinview3d.SkinViewer({
-                    canvas: document.createElement("canvas"),
-                    width: width,
-                    height: height,
-                    skin: startSkin
-                });
-
-                container.appendChild(skinViewer.canvas);
-
-                skinViewer.camera.position.x = 20;
-                skinViewer.camera.position.y = 15;
-                skinViewer.camera.position.z = 40;
-                skinViewer.zoom = 0.9;
-                skinViewer.animation = new skinview3d.IdleAnimation();
-                skinViewer.controls.enableRotate = true;
-                skinViewer.controls.enableZoom = true;
-                skinViewer.autoRotate = false;
-                
-                window.addEventListener('resize', () => {
-                    if(container) {
-                        skinViewer.width = container.offsetWidth;
-                        skinViewer.height = container.offsetHeight;
-                    }
-                });
-
-                // Если проверка включена, пробуем найти настоящий скин.
-                if (checkSkin) {
-                    const isValidName = /^[a-zA-Z0-9_]{3,16}$/.test(username);
-                    if (isValidName) {
-                        fetch(`https://api.ashcon.app/mojang/v2/user/${username}`)
-                            .then(response => {
-                                if (!response.ok) throw new Error('Not found');
-                                return response.json();
-                            })
-                            .then(data => {
-                                if (data.textures && data.textures.custom === true) {
-                                    skinViewer.loadSkin(TARGET_SKIN);
-                                }
-                            })
-                            .catch(() => {});
-                    }
-                }
-            }
-
-            // Инициализация Создателей (без проверок)
-            initSkinViewer("skin-container-shark", "X_x_shark_x_X", false);
-            initSkinViewer("skin-container-leynar", "Leynar_", false);
-        });
-    </script>
 </body>
 </html>
