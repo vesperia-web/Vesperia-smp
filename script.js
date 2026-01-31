@@ -398,9 +398,9 @@ async function loadTopics() {
     const grid = document.getElementById('postsGrid');
     if (!grid) return;
     
-    // Теперь запрашиваем и is_banned, чтобы корректно отображать теги
+    // ИСПРАВЛЕНИЕ: Добавлен запрос поля 'id'
     const { data, error } = await sb.from('topics')
-        .select('*, users(username, avatar_url, role, is_banned)')
+        .select('*, users(id, username, avatar_url, role, is_banned)')
         .order('created_at', { ascending: false });
 
     if (error || !data || data.length === 0) {
@@ -474,8 +474,10 @@ window.openTopic = async function(topicId) {
     const container = document.getElementById('chatContainer');
     container.innerHTML = '<div class="loading-state">Загрузка...</div>';
     
-    // Запрашиваем автора темы + is_banned
-    const { data: topic } = await sb.from('topics').select('*, users(username, avatar_url, role, status, is_banned)').eq('id', topicId).single();
+    // ИСПРАВЛЕНИЕ: Добавлен запрос поля 'id'
+    const { data: topic } = await sb.from('topics')
+        .select('*, users(id, username, avatar_url, role, status, is_banned)')
+        .eq('id', topicId).single();
     if (!topic) {
         container.innerHTML = 'Ошибка загрузки.';
         return;
@@ -501,9 +503,9 @@ window.openTopic = async function(topicId) {
         if (closedMsg) closedMsg.style.display = 'none';
     }
 
-    // Запрашиваем комментарии + is_banned авторов
+    // ИСПРАВЛЕНИЕ: Добавлен запрос поля 'id' для комментариев
     const { data: comments } = await sb.from('comments')
-        .select('*, users(username, avatar_url, role, status, is_banned)')
+        .select('*, users(id, username, avatar_url, role, status, is_banned)')
         .eq('topic_id', topicId)
         .order('created_at');
     
