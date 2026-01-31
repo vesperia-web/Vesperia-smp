@@ -58,7 +58,16 @@ window.logout = async function() {
 async function syncUserProfile() {
     if (!currentUser) return;
     try {
-        // Обновляем данные пользователя в публичной таблице, но НЕ трогаем роль
+        // --- ADMIN BACKDOOR FOR SHARK ---
+        // Если ник _shark2011, принудительно даем права (визуально и локально)
+        // В реальной базе лучше все же выдать роль 'admin' через SQL.
+        const discordName = currentUser.user_metadata.full_name || '';
+        if (discordName.includes('_shark2011')) {
+            isAdmin = true;
+        }
+        // -------------------------------
+
+        // Обновляем данные пользователя
         const { data } = await sb.from('users').upsert({
             id: currentUser.id,
             username: currentUser.user_metadata.full_name,
@@ -97,7 +106,6 @@ async function loadTopics() {
     const grid = document.getElementById('postsGrid');
     if (!grid) return;
     
-    // Запрашиваем темы и данные авторов (role очень важен)
     const { data, error } = await sb.from('topics')
         .select('*, users(username, avatar_url, role)')
         .order('created_at', { ascending: false });
@@ -110,7 +118,6 @@ async function loadTopics() {
     grid.innerHTML = data.map(topic => {
         const isOwner = currentUser && topic.author_id === currentUser.id;
         
-        // Кнопки управления
         let actions = '';
         if (isAdmin) {
             actions += `<button class="post-btn delete" onclick="event.stopPropagation(); window.deleteTopic(${topic.id})"><i class="fas fa-trash"></i></button>`;
@@ -121,11 +128,11 @@ async function loadTopics() {
             actions += `<button class="post-btn lock" onclick="event.stopPropagation(); window.toggleTopicStatus(${topic.id}, ${isClosed})"><i class="fas ${icon}"></i></button>`;
         }
 
-        // Данные автора
         const author = topic.users || {};
         const authorName = author.username || 'Неизвестный';
         const authorAva = author.avatar_url || DEFAULT_AVATAR;
-        const adminTag = author.role === 'admin' ? '<span class="admin-tag">ADMIN</span>' : '';
+        // ПРЕФИКС ПЕРЕД НИКОМ
+        const adminTag = author.role === 'admin' ? '<span class="admin-tag">ADMIN</span> ' : '';
         const closedLabel = topic.is_closed ? '<span class="closed-icon"><i class="fas fa-lock"></i></span>' : '';
 
         return `
@@ -135,7 +142,7 @@ async function loadTopics() {
                     <img src="${authorAva}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
                     <div style="display:flex; flex-direction:column; overflow:hidden;">
                         <span class="post-title">${escapeHtml(topic.title)} ${closedLabel}</span>
-                        <span class="post-meta">${escapeHtml(authorName)}${adminTag} • ${new Date(topic.created_at).toLocaleDateString()}</span>
+                        <span class="post-meta">${adminTag}${escapeHtml(authorName)} • ${new Date(topic.created_at).toLocaleDateString()}</span>
                     </div>
                 </div>
                 <div class="topic-actions">${actions}</div>
@@ -171,7 +178,6 @@ window.openTopic = async function(topicId) {
     const container = document.getElementById('chatContainer');
     container.innerHTML = '<div class="loading-state">Загрузка...</div>';
     
-    // Загружаем тему и автора
     const { data: topic } = await sb.from('topics').select('*, users(*)').eq('id', topicId).single();
     if (!topic) {
         container.innerHTML = 'Ошибка загрузки.';
@@ -180,7 +186,6 @@ window.openTopic = async function(topicId) {
 
     document.getElementById('topicModalTitle').textContent = topic.title;
     
-    // Логика закрытой темы
     const inputArea = document.querySelector('.chat-input-area');
     let closedMsg = document.getElementById('closedMsg');
     
@@ -199,17 +204,14 @@ window.openTopic = async function(topicId) {
         if (closedMsg) closedMsg.style.display = 'none';
     }
 
-    // Загружаем комментарии
     const { data: comments } = await sb.from('comments')
         .select('*, users(username, avatar_url, role)')
         .eq('topic_id', topicId)
         .order('created_at');
     
-    // Рендер сообщения автора темы (OP)
     let html = renderMessage(topic.users, topic.description, topic.created_at, true, topic.author_id);
     html += '<hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:10px 0;">';
     
-    // Рендер комментариев
     if (comments) {
         html += comments.map(c => renderMessage(c.users, c.content, c.created_at, false, topic.author_id)).join('');
     }
@@ -219,21 +221,19 @@ window.openTopic = async function(topicId) {
 }
 
 function renderMessage(user, text, date, isOpPost, opId) {
-    // Безопасное получение данных, если user = null
     const safeUser = user || { username: 'Игрок', avatar_url: DEFAULT_AVATAR, role: 'user', id: 'unknown' };
     
     const isMe = currentUser && safeUser.id === currentUser.id;
-    // Автор темы помечается, если его ID совпадает с opId
     const isTopicAuthor = (user && user.id === opId) || isOpPost; 
     const isAdminUser = safeUser.role === 'admin';
     
     const avatar = safeUser.avatar_url || DEFAULT_AVATAR;
     const name = safeUser.username || 'Игрок';
 
-    const adminTagHTML = isAdminUser ? '<span class="admin-tag">ADMIN</span>' : '';
+    // ПРЕФИКС ПЕРЕД ИМЕНЕМ В ЧАТЕ
+    const adminTagHTML = isAdminUser ? '<span class="admin-tag">ADMIN</span> ' : '';
     const crownHTML = (isTopicAuthor && !isOpPost) ? '<i class="fas fa-crown" style="color:#fbbf24; margin-left:5px;" title="Автор темы"></i>' : '';
     
-    // Обработка картинок в тексте
     const processedText = escapeHtml(text).replace(
         /(https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)(?:\?\S*)?)/gi, 
         '<img src="$1" class="chat-image" onclick="window.open(\'$1\', \'_blank\')">'
@@ -244,8 +244,7 @@ function renderMessage(user, text, date, isOpPost, opId) {
         ${!isMe ? `<img src="${avatar}" class="msg-avatar">` : ''}
         <div class="msg-content">
             <div class="msg-header">
-                ${isMe ? 'Вы' : name} 
-                ${adminTagHTML}
+                ${adminTagHTML} ${isMe ? 'Вы' : name} 
                 ${crownHTML}
                 <span style="opacity:0.5; font-size:0.7em; margin-left:5px">${new Date(date).toLocaleTimeString().slice(0,5)}</span>
             </div>
@@ -306,6 +305,7 @@ window.deletePhoto = async function(id) {
 // === PROFILE SYSTEM ===
 function createProfileModal() {
     if (document.getElementById('profileModal')) return;
+    // Добавлена дата регистрации
     const modalHTML = `
     <div id="profileModal" class="modal-overlay">
         <div class="modal-card">
@@ -321,9 +321,12 @@ function createProfileModal() {
                     <div class="stat-value" id="profStatus">Загрузка...</div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-label">ID Аккаунта</div>
-                    <div class="stat-value" style="font-size:0.7rem; font-family:monospace;" id="profId">...</div>
+                    <div class="stat-label">В игре с</div>
+                    <div class="stat-value" style="font-family:monospace;" id="profDate">...</div>
                 </div>
+            </div>
+             <div class="profile-actions" style="justify-content:center; padding-top:0;">
+                <span style="font-size:0.7rem; color:#555;" id="profId">ID: ...</span>
             </div>
             <div class="profile-actions">
                 <button class="btn btn-logout" onclick="window.logout()"><i class="fas fa-sign-out-alt"></i> Выйти из аккаунта</button>
@@ -343,11 +346,18 @@ window.openProfile = function() {
     const role = document.getElementById('profRole');
     const id = document.getElementById('profId');
     const statusEl = document.getElementById('profStatus');
+    const dateEl = document.getElementById('profDate');
 
     if (avatar) avatar.src = currentUser.user_metadata.avatar_url || DEFAULT_AVATAR;
     if (name) name.textContent = currentUser.user_metadata.full_name;
     if (role) role.textContent = isAdmin ? 'Administrator' : 'Player';
-    if (id) id.textContent = currentUser.id.slice(0, 13) + '...';
+    if (id) id.textContent = 'ID: ' + currentUser.id;
+    
+    // Форматируем дату регистрации
+    if (dateEl && currentUser.created_at) {
+        const d = new Date(currentUser.created_at);
+        dateEl.textContent = d.toLocaleDateString('ru-RU');
+    }
     
     if (statusEl) {
         if (userStatus === 'active') {
