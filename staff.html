@@ -209,23 +209,29 @@
     <!-- Скрипт инициализации 3D моделей -->
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            // Третий параметр checkSkin (по умолчанию false)
+            // Третий параметр checkSkin
             window.initSkinViewer = function(containerId, username, checkSkin = false) {
                 const container = document.getElementById(containerId);
                 if(!container) return;
                 
-                // Очищаем, если там уже был канвас (при перезагрузке)
                 container.innerHTML = '';
-
                 const width = container.offsetWidth;
                 const height = container.offsetHeight;
 
-                // Создаем вьюер со скином по умолчанию (по нику)
+                // ЛОГИКА:
+                // Если checkSkin = true (обычный участник), мы сначала ставим DripBlue_.
+                // Если checkSkin = false (админ), мы сразу верим, что ник правильный.
+                
+                const DEFAULT_SKIN = 'https://minotar.net/skin/DripBlue_';
+                const TARGET_SKIN = `https://minotar.net/skin/${username}`;
+                
+                const startSkin = checkSkin ? DEFAULT_SKIN : TARGET_SKIN;
+
                 const skinViewer = new skinview3d.SkinViewer({
                     canvas: document.createElement("canvas"),
                     width: width,
                     height: height,
-                    skin: `https://minotar.net/skin/${username}`
+                    skin: startSkin
                 });
 
                 container.appendChild(skinViewer.canvas);
@@ -237,7 +243,6 @@
                 skinViewer.animation = new skinview3d.IdleAnimation();
                 skinViewer.controls.enableRotate = true;
                 skinViewer.controls.enableZoom = true;
-                skinViewer.controls.enablePan = false;
                 skinViewer.autoRotate = false;
                 
                 window.addEventListener('resize', () => {
@@ -247,28 +252,34 @@
                     }
                 });
 
-                // ПРОВЕРКА СКИНА НА ВАЛИДНОСТЬ / КАСТОМНОСТЬ
-                // Выполняется ТОЛЬКО если checkSkin === true
+                // Если проверка включена, пробуем найти настоящий скин.
+                // Если находим - меняем DripBlue_ на скин игрока.
+                // Если НЕ находим или ошибка - оставляем DripBlue_ (который уже стоит).
                 if (checkSkin) {
-                    fetch(`https://api.ashcon.app/mojang/v2/user/${username}`)
-                        .then(response => {
-                            if (!response.ok) throw new Error('Not found');
-                            return response.json();
-                        })
-                        .then(data => {
-                            // Если скин не кастомный (обычный Стив/Алекс) -> меняем на DripBlue_
-                            if (data.textures && data.textures.custom === false) {
-                                skinViewer.loadSkin('https://minotar.net/skin/DripBlue_');
-                            }
-                        })
-                        .catch(() => {
-                            // Если ошибка (игрок не найден, нет лицензии или API лежит) -> меняем на DripBlue_
-                            skinViewer.loadSkin('https://minotar.net/skin/DripBlue_');
-                        });
+                    // Базовая проверка регуляркой (Minecraft ники не могут быть такими как на скрине)
+                    const isValidName = /^[a-zA-Z0-9_]{3,16}$/.test(username);
+                    
+                    if (isValidName) {
+                        fetch(`https://api.ashcon.app/mojang/v2/user/${username}`)
+                            .then(response => {
+                                if (!response.ok) throw new Error('Not found');
+                                return response.json();
+                            })
+                            .then(data => {
+                                // Если скин кастомный, ставим его. 
+                                // Если не кастомный (обычный Стив), ничего не делаем (остается DripBlue_)
+                                if (data.textures && data.textures.custom === true) {
+                                    skinViewer.loadSkin(TARGET_SKIN);
+                                }
+                            })
+                            .catch(() => {
+                                // Ошибка API или игрока нет -> Ничего не делаем, DripBlue_ уже стоит.
+                            });
+                    }
                 }
             }
 
-            // Инициализация Создателей с checkSkin = false (скин не проверяется и не заменяется)
+            // Инициализация Создателей (без проверок)
             initSkinViewer("skin-container-shark", "X_x_shark_x_X", false);
             initSkinViewer("skin-container-leynar", "Leynar_", false);
         });
