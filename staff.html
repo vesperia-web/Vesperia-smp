@@ -220,6 +220,7 @@
                 const width = container.offsetWidth;
                 const height = container.offsetHeight;
 
+                // Создаем вьюер со скином по умолчанию (по нику)
                 const skinViewer = new skinview3d.SkinViewer({
                     canvas: document.createElement("canvas"),
                     width: width,
@@ -245,6 +246,25 @@
                         skinViewer.height = container.offsetHeight;
                     }
                 });
+
+                // ПРОВЕРКА СКИНА НА ВАЛИДНОСТЬ / КАСТОМНОСТЬ
+                // Если API вернет ошибку (игрок не существует) или custom=false (дефолтный скин)
+                // то меняем скин на DripBlue_
+                fetch(`https://api.ashcon.app/mojang/v2/user/${username}`)
+                    .then(response => {
+                        if (!response.ok) throw new Error('Not found');
+                        return response.json();
+                    })
+                    .then(data => {
+                        // Если скин не кастомный (обычный Стив/Алекс) -> меняем на DripBlue_
+                        if (data.textures && data.textures.custom === false) {
+                            skinViewer.loadSkin('https://minotar.net/skin/DripBlue_');
+                        }
+                    })
+                    .catch(() => {
+                        // Если ошибка (игрок не найден, нет лицензии или API лежит) -> меняем на DripBlue_
+                        skinViewer.loadSkin('https://minotar.net/skin/DripBlue_');
+                    });
             }
 
             // Инициализация Создателей
