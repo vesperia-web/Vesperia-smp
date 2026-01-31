@@ -6,7 +6,7 @@ const sb = supabase.createClient(SB_URL, SB_KEY);
 
 // DEFAULT ASSETS
 const DEFAULT_AVATAR = 'https://i.postimg.cc/Pf4nb7xV/logo.png';
-// СПИСОК НИКОВ АДМИНОВ (ДЛЯ UI)
+// СПИСОК НИКОВ АДМИНОВ (DISCORD username в нижнем регистре)
 const ADMIN_NICKS = ['_shark2011', 'r_leynar'];
 
 let currentUser = null;
@@ -138,6 +138,9 @@ async function loadTopics() {
         
         // VISUAL PREFIX LOGIC FOR TOPICS
         const authorNameLower = authorName.toLowerCase();
+        // Здесь тоже проверяем по discord-никам, но для визуала это не идеально, 
+        // так как в базе хранятся ники, с которыми зашли. 
+        // Но пока оставим логику как есть, она сработает если пользователь зашел.
         const isHardcodedAdmin = ADMIN_NICKS.some(nick => authorNameLower.includes(nick));
         const adminTag = (author.role === 'admin' || isHardcodedAdmin) ? '<span class="admin-tag">ADMIN</span> ' : '';
         const closedLabel = topic.is_closed ? '<span class="closed-icon"><i class="fas fa-lock"></i></span>' : '';
