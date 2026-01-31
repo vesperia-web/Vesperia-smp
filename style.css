@@ -149,7 +149,7 @@ body {
 .post-entry.closed { opacity: 0.7; border-color: rgba(239, 68, 68, 0.3); }
 .post-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
 .post-title { font-size: 1.2rem; font-weight: 700; color: white; max-width: 80%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-.post-meta { font-size: 0.8rem; color: #64748b; font-weight: 600; }
+.post-meta { font-size: 0.8rem; color: #64748b; font-weight: 600; display: flex; align-items: center; gap: 6px;}
 .post-body { color: #cbd5e1; font-size: 0.95rem; line-height: 1.6; word-break: break-word; }
 .topic-actions { display: flex; gap: 10px; }
 .post-btn {
@@ -173,9 +173,19 @@ body {
 .msg-bubble { background: #1f1f23; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border); word-break: break-word; }
 .msg-row.mine .msg-bubble { background: rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.4); border-top-right-radius: 2px; }
 .msg-row:not(.mine) .msg-bubble { border-top-left-radius: 2px; }
-.msg-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 0.75rem; color: #64748b; }
+.msg-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 0.75rem; color: #64748b; }
 .msg-author { font-weight: 700; color: #e2e8f0; }
-.admin-tag { background: var(--red); color: white; padding: 1px 4px; border-radius: 3px; font-size: 0.6rem; margin-left: 5px; }
+/* UPDATED ADMIN TAG */
+.admin-tag { 
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+    color: white; 
+    padding: 2px 6px; 
+    border-radius: 4px; 
+    font-size: 0.65rem; 
+    font-weight: 800;
+    box-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
+    margin-right: 4px;
+}
 .reply-btn { background: none; border: none; color: #64748b; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; opacity: 0.6; }
 .chat-image { max-width: 100%; border-radius: 8px; margin-top: 5px; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
 
