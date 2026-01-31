@@ -168,7 +168,7 @@ function handleRoute(url) {
         setTimeout(() => {
             initSkinViewer("skin-container-shark", "X_x_shark_x_X", false);
             initSkinViewer("skin-container-leynar", "Leynar_", false);
-        }, 100);
+        }, 300);
     }
     
     // Всегда обновляем UI авторизации при смене страницы
@@ -308,7 +308,7 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
     const isMe = currentUser && u.id === currentUser.id;
     const isAuthor = (u.id === opId) || isOpPost;
     
-    // Админские кнопки видят только Админы, Владельцы, Девы
+    // Админские кнопки видят только Админы, Владельцы, Девы (абсолютно равные права)
     let adminBtns = '';
     if (isAdmin && u.id !== 'unknown') {
         const del = commentId ? `<button class="chat-action-btn btn-chat-del" onclick="window.deleteComment(${commentId})"><i class="fas fa-trash"></i></button>` : '';
@@ -337,7 +337,7 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
                 ${getRoleBadge(u.role)}
                 ${u.is_banned ? '<span class="banned-tag">BANNED</span>' : ''}
                 <span class="msg-author">${escapeHtml(u.username)}</span>
-                ${isAuthor && !isOpPost ? '<i class="fas fa-crown" style="color:#fbbf24; margin-left:4px;"></i>' : ''}
+                ${isAuthor && !isOpPost ? '<i class="fas fa-crown" style="color:#fbbf24; margin-left:4px;" title="Автор темы"></i>' : ''}
                 <span style="opacity:0.5; margin-left:6px;">${new Date(date).toLocaleTimeString().slice(0,5)}</span>
                 ${adminBtns}
             </div>
@@ -531,17 +531,17 @@ function updateAuthUI() {
     const meta = currentUser.user_metadata;
     const name = meta.full_name.split('#')[0];
     
-    // Значок рядом с профилем
+    // Красивые иконки для UI профиля
     let badge = '';
-    if (userRole === 'owner') badge = '👑';
-    else if (userRole === 'developer') badge = '🛠';
-    else if (userRole === 'admin') badge = '•';
+    if (userRole === 'owner') badge = '<i class="fas fa-crown" style="color:#ef4444; font-size:0.8rem;"></i>';
+    else if (userRole === 'developer') badge = '<i class="fas fa-code" style="color:#22d3ee; font-size:0.8rem;"></i>';
+    else if (userRole === 'admin') badge = '<i class="fas fa-shield-alt" style="color:#fbbf24; font-size:0.8rem;"></i>';
 
     box.innerHTML = `
         <div class="auth-trigger" onclick="window.toggleProfile()">
             <img src="${meta.avatar_url || DEFAULT_AVATAR}" class="auth-avatar">
             <span class="auth-name">${name}</span>
-            <span style="color:#ef4444; margin-left:5px;">${badge}</span>
+            <span style="margin-left:6px; display:flex; align-items:center;">${badge}</span>
         </div>
     `;
     
@@ -585,9 +585,9 @@ function createProfileDropdown(meta, name) {
 }
 
 function getRoleBadge(role) {
-    if (role === 'owner') return '<span class="tag-owner">OWNER</span>';
-    if (role === 'developer') return '<span class="tag-dev">DEV</span>';
-    if (role === 'admin') return '<span class="admin-tag">ADMIN</span>';
+    if (role === 'owner') return '<span class="role-badge badge-owner"><i class="fas fa-crown"></i> OWNER</span>';
+    if (role === 'developer') return '<span class="role-badge badge-dev"><i class="fas fa-code"></i> DEV</span>';
+    if (role === 'admin') return '<span class="role-badge badge-admin"><i class="fas fa-shield-alt"></i> ADMIN</span>';
     return '';
 }
 
@@ -621,7 +621,11 @@ function escapeHtml(t) { return t ? t.replace(/&/g, "&amp;").replace(/</g, "&lt;
 
 // 3D Skin Helper
 window.initSkinViewer = function(elemId, nick, check) {
-    if(typeof skinview3d === 'undefined') return;
+    // Небольшая защита от отсутствия библиотеки (если скрипт еще грузится)
+    if(typeof skinview3d === 'undefined') {
+        setTimeout(() => window.initSkinViewer(elemId, nick, check), 500);
+        return;
+    }
     const el = document.getElementById(elemId);
     if(!el) return;
     el.innerHTML = ''; // Clear prev
