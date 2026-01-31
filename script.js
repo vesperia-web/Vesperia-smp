@@ -17,7 +17,6 @@ let currentTopicId = null;
 // INIT
 window.addEventListener('DOMContentLoaded', async () => {
     initStars();
-    createProfileModal(); 
     
     // 1. ЗАГРУЗКА КОНТЕНТА
     const isForum = document.getElementById('postsGrid');
@@ -48,6 +47,18 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (commentInput) {
         commentInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') submitComment(); });
     }
+
+    // Закрытие dropdown при клике вне
+    document.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('profileDropdown');
+        const trigger = document.querySelector('.auth-trigger');
+        if (dropdown && dropdown.classList.contains('show')) {
+            if (!dropdown.contains(e.target) && !trigger.contains(e.target)) {
+                dropdown.classList.remove('show');
+                if(trigger) trigger.classList.remove('active');
+            }
+        }
+    });
 });
 
 // DELCARE GLOBAL FUNCTIONS
@@ -80,11 +91,6 @@ async function syncUserProfile() {
             // Проверка по базе данных (если роль выдана там)
             if (data.role === 'admin') isAdmin = true;
             if (data.status) userStatus = data.status;
-            
-            // Если роль админа есть в базе, но не по хардкоду, синхронизируем переменную
-            if (isAdmin && data.role !== 'admin') {
-                // Опционально: можно обновить роль в базе, если нужно
-            }
         }
     } catch (e) { console.error("Sync error:", e); }
 }
@@ -97,26 +103,77 @@ function updateAuthUI() {
         const adminDot = isAdmin ? '<span style="color:#ef4444; font-size:1.2rem; line-height:0; margin-left:4px;">•</span>' : '';
         
         container.innerHTML = `
-            <div class="auth-trigger" onclick="window.openProfile()">
+            <div class="auth-trigger" onclick="window.toggleProfile()">
                 <img src="${meta.avatar_url || DEFAULT_AVATAR}" class="auth-avatar">
                 <span class="auth-name">${safeName}</span>
                 ${adminDot}
             </div>
         `;
         
+        // Создаем выпадающее меню
+        createProfileDropdown(meta, safeName);
+        
         // Показываем кнопки "auth-only"
-        // Если кнопка требует админки (удаление/перемещение), мы ее не показываем здесь, 
-        // она генерируется динамически в функциях load...
         document.querySelectorAll('.auth-only').forEach(btn => {
-            // Кнопка добавления участника видна ТОЛЬКО админу
             if (btn.innerText.includes('участника')) {
                 if (isAdmin) btn.style.setProperty('display', 'inline-flex', 'important');
             } 
-            // Кнопки создания тем/фото видна всем авторизованным (или админам, если так задумано)
             else if (btn.innerText.includes('тему') || btn.innerText.includes('фото')) {
                 btn.style.setProperty('display', 'inline-flex', 'important');
             }
         });
+    }
+}
+
+function createProfileDropdown(meta, name) {
+    // Удаляем старое меню если есть
+    const old = document.getElementById('profileDropdown');
+    if (old) old.remove();
+
+    // Определяем статус
+    let statusHTML = '<span class="d-val status-none">Нет</span>';
+    if (userStatus === 'active') statusHTML = '<span class="d-val status-active">Активен</span>';
+    if (userStatus === 'banned') statusHTML = '<span class="d-val status-banned">Забанен</span>';
+    
+    // Дата регистрации
+    const d = new Date(currentUser.created_at);
+    const dateStr = d.toLocaleDateString('ru-RU');
+    
+    const html = `
+    <div id="profileDropdown" class="profile-dropdown">
+        <div class="dropdown-header">
+            <img src="${meta.avatar_url || DEFAULT_AVATAR}" class="dropdown-avatar">
+            <div class="dropdown-user-info">
+                <div class="dropdown-name">${name}</div>
+                <div class="dropdown-role">${isAdmin ? 'ADMINISTRATOR' : 'PLAYER'}</div>
+            </div>
+        </div>
+        <div class="dropdown-stats">
+            <div class="d-stat">
+                <div class="d-label">Статус</div>
+                ${statusHTML}
+            </div>
+            <div style="width:1px; background:rgba(255,255,255,0.1);"></div>
+            <div class="d-stat">
+                <div class="d-label">Регистрация</div>
+                <div class="d-val" style="font-family:monospace; font-size:0.75rem;">${dateStr}</div>
+            </div>
+        </div>
+        <button class="dropdown-btn logout" onclick="window.logout()"><i class="fas fa-sign-out-alt"></i> Выйти</button>
+    </div>
+    `;
+    
+    // Вставляем в навигацию или в body (но лучше в nav для позиционирования)
+    // Т.к. nav-container имеет position: relative
+    document.querySelector('.nav-container').insertAdjacentHTML('beforeend', html);
+}
+
+window.toggleProfile = function() {
+    const dropdown = document.getElementById('profileDropdown');
+    const trigger = document.querySelector('.auth-trigger');
+    if (dropdown) {
+        dropdown.classList.toggle('show');
+        if(trigger) trigger.classList.toggle('active');
     }
 }
 
@@ -127,21 +184,19 @@ window.loadActiveMembers = async function() {
     const grid = document.getElementById('activeMembersGrid');
     if (!grid) return;
 
-    // Предполагаем, что таблица active_members существует: id, username, description, order_ind
     const { data, error } = await sb.from('active_members').select('*').order('order_ind', { ascending: true });
 
     if (error || !data || data.length === 0) {
         if (isAdmin) {
              grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:#555;">Список пуст. Добавьте участников.</div>';
         } else {
-             // Обычные игроки могут не видеть ничего, если список пуст
              grid.innerHTML = '';
         }
         return;
     }
 
     cachedMembers = data;
-    grid.innerHTML = ''; // Clear
+    grid.innerHTML = ''; 
 
     data.forEach((member, index) => {
         const uniqueId = `skin-dyn-${member.id}`;
@@ -170,23 +225,20 @@ window.loadActiveMembers = async function() {
         `;
         grid.insertAdjacentHTML('beforeend', cardHTML);
         
-        // Init 3D Viewer if the global function exists
         if (window.initSkinViewer) {
-            // true - ВКЛЮЧИТЬ проверку скинов для динамических участников
             setTimeout(() => window.initSkinViewer(uniqueId, member.username, true), 100);
         }
     });
 }
 
 window.submitActiveMember = async function() {
-    if (!isAdmin) return showToast('Доступ запрещен!', true); // ЗАЩИТА
+    if (!isAdmin) return showToast('Доступ запрещен!', true);
     
     const nick = document.getElementById('memberNick').value.trim();
     const desc = document.getElementById('memberDesc').value.trim();
     
     if (!nick) return showToast('Введите ник!', true);
 
-    // Get max order index
     const { data: maxData } = await sb.from('active_members').select('order_ind').order('order_ind', { ascending: false }).limit(1);
     const nextOrder = (maxData && maxData.length > 0) ? maxData[0].order_ind + 1 : 1;
 
@@ -204,23 +256,20 @@ window.submitActiveMember = async function() {
 }
 
 window.deleteMember = async function(id) {
-    if (!isAdmin) return; // ЗАЩИТА
+    if (!isAdmin) return;
     if (!confirm('Удалить участника?')) return;
     await sb.from('active_members').delete().eq('id', id);
     loadActiveMembers();
 }
 
 window.moveMember = async function(currentIndex, direction) {
-    if (!isAdmin) return; // ЗАЩИТА
-    
-    // direction: -1 (left/up), 1 (right/down)
+    if (!isAdmin) return;
     const targetIndex = currentIndex + direction;
     if (targetIndex < 0 || targetIndex >= cachedMembers.length) return;
 
     const currentItem = cachedMembers[currentIndex];
     const targetItem = cachedMembers[targetIndex];
 
-    // Swap order_ind in Supabase
     const order1 = currentItem.order_ind;
     const order2 = targetItem.order_ind;
 
@@ -297,12 +346,11 @@ window.submitPost = async function() {
 }
 
 window.deleteTopic = async function(id) {
-    if (!isAdmin) return showToast('Только для админов!', true); // ЗАЩИТА
+    if (!isAdmin) return showToast('Только для админов!', true);
     if (confirm('Удалить тему навсегда?')) { await sb.from('topics').delete().eq('id', id); loadTopics(); }
 }
 
 window.toggleTopicStatus = async function(id, s) {
-    // Здесь проверка мягче: админ ИЛИ владелец (в loadTopics кнопка генерируется только им)
     await sb.from('topics').update({ is_closed: !s }).eq('id', id); loadTopics();
 }
 
@@ -344,7 +392,7 @@ window.openTopic = async function(topicId) {
         .eq('topic_id', topicId)
         .order('created_at');
     
-    // Рендер главного поста (null вместо commentId)
+    // Рендер главного поста
     let html = renderMessage(topic.users, topic.description, topic.created_at, true, topic.author_id, null);
     html += '<hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:10px 0;">';
     
@@ -365,29 +413,34 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
     const avatar = safeUser.avatar_url || DEFAULT_AVATAR;
     const name = safeUser.username || 'Игрок';
 
-    // VISUAL PREFIX LOGIC FOR CHAT
     const nameLower = name.toLowerCase();
     const isHardcodedAdmin = ADMIN_NICKS.some(nick => nameLower.includes(nick));
     const isAdminUser = safeUser.role === 'admin' || isHardcodedAdmin;
     const isBanned = safeUser.status === 'banned';
 
-    // ПРЕФИКС ПЕРЕД ИМЕНЕМ В ЧАТЕ
     const adminTagHTML = isAdminUser ? '<span class="admin-tag">ADMIN</span> ' : '';
     const bannedTagHTML = isBanned ? '<span class="banned-tag">BANNED</span> ' : '';
     const crownHTML = (isTopicAuthor && !isOpPost) ? '<i class="fas fa-crown" style="color:#fbbf24; margin-left:5px;" title="Автор темы"></i>' : '';
     
     // КНОПКИ АДМИНА
     let adminActions = '';
-    if (isAdmin && !isMe) { // Не показываем на себе
-        // Кнопка удаления (только для комментариев, не для OP поста здесь)
-        const delBtn = (!isOpPost && commentId) ? `<button class="chat-action-btn btn-chat-del" onclick="window.deleteComment(${commentId})" title="Удалить сообщение"><i class="fas fa-trash"></i></button>` : '';
+    // Показываем кнопки, если я админ, и это сообщение не моё (хотя удалить своё я тоже могу, но бан не нужен)
+    // Разрешаем удалять все сообщения, но банить только чужих и не админов
+    if (isAdmin) {
+        // Удалить можно любое сообщение (кроме поста темы, если так решено, но тут commentId=null для поста)
+        const delBtn = (commentId) ? `<button class="chat-action-btn btn-chat-del" onclick="window.deleteComment(${commentId})" title="Удалить сообщение"><i class="fas fa-trash"></i></button>` : '';
         
-        // Кнопка Бана (нельзя банить админов)
-        const banBtnText = isBanned ? '<i class="fas fa-user-check"></i>' : '<i class="fas fa-gavel"></i>';
-        const banBtnTitle = isBanned ? 'Разбанить' : 'Забанить';
-        const banBtn = !isAdminUser ? `<button class="chat-action-btn btn-chat-ban" onclick="window.banUser('${safeUser.id}', ${!isBanned})" title="${banBtnTitle}">${banBtnText}</button>` : '';
+        // Банить можно только не себя и не админов
+        let banBtn = '';
+        if (!isMe && !isAdminUser) {
+            const banBtnText = isBanned ? '<i class="fas fa-user-check"></i>' : '<i class="fas fa-gavel"></i>';
+            const banBtnTitle = isBanned ? 'Разбанить' : 'Забанить';
+            banBtn = `<button class="chat-action-btn btn-chat-ban" onclick="window.banUser('${safeUser.id}', ${!isBanned})" title="${banBtnTitle}">${banBtnText}</button>`;
+        }
         
-        adminActions = `<div class="chat-admin-actions">${banBtn}${delBtn}</div>`;
+        if (delBtn || banBtn) {
+            adminActions = `<div class="chat-admin-actions">${banBtn}${delBtn}</div>`;
+        }
     }
 
     const processedText = escapeHtml(text).replace(
@@ -441,7 +494,7 @@ window.deleteComment = async function(commentId) {
         const { error } = await sb.from('comments').delete().eq('id', commentId);
         if (!error) {
             showToast('Комментарий удален');
-            window.openTopic(currentTopicId); // Обновляем чат
+            window.openTopic(currentTopicId); 
         } else {
             showToast('Ошибка: ' + error.message, true);
         }
@@ -457,7 +510,7 @@ window.banUser = async function(userId, shouldBan) {
         const { error } = await sb.from('users').update({ status: status }).eq('id', userId);
         if (!error) {
             showToast(`Пользователь ${shouldBan ? 'забанен' : 'разбанен'}`);
-            window.openTopic(currentTopicId); // Обновляем чат, чтобы обновились теги и кнопки
+            window.openTopic(currentTopicId); 
         } else {
             showToast('Ошибка: ' + error.message, true);
         }
@@ -492,74 +545,12 @@ window.deletePhoto = async function(id) {
     if(confirm('Удалить фото?')) { await sb.from('gallery').delete().eq('id', id); loadGallery(); } 
 }
 
-// === PROFILE SYSTEM ===
-function createProfileModal() {
-    if (document.getElementById('profileModal')) return;
-    const modalHTML = `
-    <div id="profileModal" class="modal-overlay">
-        <div class="modal-card">
-            <div class="profile-header">
-                <img src="${DEFAULT_AVATAR}" id="profAvatar" class="profile-avatar-xl">
-                <div id="profName" class="profile-name">Username</div>
-                <div id="profRole" class="profile-role">Player</div>
-                <button class="close-btn" onclick="window.closeModals()" style="position:absolute; top:20px; right:20px; color:white;">&times;</button>
-            </div>
-            <div class="profile-stats">
-                <div class="stat-box">
-                    <div class="stat-label">Статус Проходки</div>
-                    <div class="stat-value" id="profStatus">Загрузка...</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Регистрация</div>
-                    <div class="stat-value" style="font-family:monospace;" id="profDate">...</div>
-                </div>
-            </div>
-            <div class="profile-actions">
-                <button class="btn btn-logout" onclick="window.logout()"><i class="fas fa-sign-out-alt"></i> Выйти из аккаунта</button>
-            </div>
-        </div>
-    </div>`;
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-}
-
-window.openProfile = function() {
-    if (!currentUser) return;
-    if (!document.getElementById('profileModal')) createProfileModal();
-    
-    const modal = document.getElementById('profileModal');
-    const avatar = document.getElementById('profAvatar');
-    const name = document.getElementById('profName');
-    const role = document.getElementById('profRole');
-    const statusEl = document.getElementById('profStatus');
-    const dateEl = document.getElementById('profDate');
-
-    if (avatar) avatar.src = currentUser.user_metadata.avatar_url || DEFAULT_AVATAR;
-    if (name) name.textContent = currentUser.user_metadata.full_name;
-    if (role) role.textContent = isAdmin ? 'Administrator' : 'Player';
-    
-    if (dateEl && currentUser.created_at) {
-        const d = new Date(currentUser.created_at);
-        dateEl.textContent = d.toLocaleDateString('ru-RU');
-    }
-    
-    if (statusEl) {
-        if (userStatus === 'active') {
-            statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Активен';
-            statusEl.className = 'stat-value status-active';
-        } else if (userStatus === 'banned') {
-            statusEl.innerHTML = '<i class="fas fa-ban"></i> Забанен';
-            statusEl.className = 'stat-value status-banned';
-        } else {
-            statusEl.innerHTML = '<i class="fas fa-times-circle"></i> Нет';
-            statusEl.className = 'stat-value status-none';
-        }
-    }
-    
-    modal.classList.add('active');
-}
-
 // UTILS
-window.closeModals = function() { document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active')); }
+window.closeModals = function() { 
+    document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active')); 
+    const dropdown = document.getElementById('profileDropdown');
+    if(dropdown) dropdown.classList.remove('show');
+}
 window.tryOpenModal = function(id) { 
     if (!currentUser) return showToast('Сначала войдите!', true);
     
