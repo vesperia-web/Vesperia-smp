@@ -73,7 +73,7 @@
             font-size: 0.8rem; 
             font-weight: 700; 
             text-transform: uppercase; 
-            margin-bottom: 5px; /* Уменьшил отступ, так как описания нет */
+            margin-bottom: 10px;
             letter-spacing: 1px;
         }
         
@@ -83,16 +83,32 @@
             border: 1px solid rgba(239, 68, 68, 0.4); 
             box-shadow: 0 0 15px rgba(239, 68, 68, 0.1);
         }
+        
+        .role-active {
+            background: rgba(139, 92, 246, 0.15);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+        }
 
-        /* Декор за карточкой */
-        .card-decoration {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            font-size: 1.5rem;
-            opacity: 0.3;
+        .staff-desc { 
+            color: #94a3b8; 
+            font-size: 0.95rem; 
+            line-height: 1.6; 
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2rem;
+            margin-top: 80px;
+            font-weight: 800;
             color: white;
-            z-index: 1;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .add-member-btn-container {
+            text-align: center;
+            margin-top: 20px;
         }
     </style>
 </head>
@@ -132,10 +148,8 @@
         <div class="staff-grid">
             <!-- SHARK -->
             <div class="staff-card">
-                <i class="fas fa-code card-decoration"></i>
                 <!-- Контейнер для 3D Canvas -->
                 <div class="model-wrapper" id="skin-container-shark"></div>
-                
                 <div class="staff-info">
                     <div class="staff-name">X_x_shark_x_X</div>
                     <div class="staff-role role-owner">Создатель</div>
@@ -144,18 +158,48 @@
 
             <!-- LEYNAR -->
             <div class="staff-card">
-                <i class="fas fa-crown card-decoration"></i>
                 <!-- Контейнер для 3D Canvas -->
                 <div class="model-wrapper" id="skin-container-leynar"></div>
-                
                 <div class="staff-info">
                     <div class="staff-name">Leynar_</div>
                     <div class="staff-role role-owner">Создатель</div>
                 </div>
             </div>
         </div>
+
+        <!-- NEW SECTION: ACTIVE MEMBERS -->
+        <h2 class="section-title">Самые Активные Участники</h2>
+        <div class="add-member-btn-container">
+             <button class="btn btn-accent auth-only" onclick="tryOpenModal('addMemberModal')"><i class="fas fa-plus"></i> Добавить участника</button>
+        </div>
+        
+        <div class="staff-grid" id="activeMembersGrid">
+            <div style="grid-column: 1/-1; text-align: center; opacity: 0.5;">Загрузка участников...</div>
+        </div>
     </main>
 
+    <!-- Modal for Adding Member -->
+    <div id="addMemberModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-head">
+                <h3>Добавить участника</h3>
+                <button class="close-btn" onclick="closeModals()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Ник в Minecraft (для скина)</label>
+                    <input type="text" id="memberNick" placeholder="Steve">
+                </div>
+                <div class="form-group">
+                    <label>Описание (кратко)</label>
+                    <textarea id="memberDesc" rows="3" placeholder="Почему он крутой?"></textarea>
+                </div>
+                <button class="btn btn-primary full-width" onclick="submitActiveMember()">Добавить</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast-box"></div>
     <footer>
         <p>&copy; 2026 Vesperia SMP. Все права защищены.</p>
         <p style="opacity: 0.5; font-size: 0.75rem; margin-top: 10px;">Not affiliated with Mojang AB.</p>
@@ -165,48 +209,45 @@
     <!-- Скрипт инициализации 3D моделей -->
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            function initSkinViewer(containerId, username) {
+            // Делаем функцию глобальной, чтобы использовать её при загрузке динамического контента
+            window.initSkinViewer = function(containerId, username) {
                 const container = document.getElementById(containerId);
-                // Получаем размеры контейнера
+                if(!container) return;
+                
+                // Очищаем, если там уже был канвас (при перезагрузке)
+                container.innerHTML = '';
+
                 const width = container.offsetWidth;
                 const height = container.offsetHeight;
 
                 const skinViewer = new skinview3d.SkinViewer({
-                    canvas: document.createElement("canvas"), // Создаем canvas динамически
+                    canvas: document.createElement("canvas"),
                     width: width,
                     height: height,
-                    skin: `https://minotar.net/skin/${username}` // Берем текстуру скина
+                    skin: `https://minotar.net/skin/${username}`
                 });
 
-                // Добавляем canvas в контейнер
                 container.appendChild(skinViewer.canvas);
 
-                // Настройки камеры (чтобы скин был виден хорошо)
                 skinViewer.camera.position.x = 20;
                 skinViewer.camera.position.y = 15;
                 skinViewer.camera.position.z = 40;
                 skinViewer.zoom = 0.9;
-
-                // Включаем анимацию "Idle" (дыхание)
                 skinViewer.animation = new skinview3d.IdleAnimation();
-                
-                // Включаем вращение мышкой
                 skinViewer.controls.enableRotate = true;
                 skinViewer.controls.enableZoom = true;
                 skinViewer.controls.enablePan = false;
-
-                // Автоматическое вращение ОТКЛЮЧЕНО
                 skinViewer.autoRotate = false;
                 
-                // Ресайз при изменении окна
                 window.addEventListener('resize', () => {
-                    skinViewer.width = container.offsetWidth;
-                    skinViewer.height = container.offsetHeight;
+                    if(container) {
+                        skinViewer.width = container.offsetWidth;
+                        skinViewer.height = container.offsetHeight;
+                    }
                 });
             }
 
-            // Инициализация для обоих админов
-            // ВАЖНО: Ники должны быть точными как в Minecraft, чтобы текстура загрузилась
+            // Инициализация Создателей
             initSkinViewer("skin-container-shark", "X_x_shark_x_X");
             initSkinViewer("skin-container-leynar", "Leynar_");
         });
