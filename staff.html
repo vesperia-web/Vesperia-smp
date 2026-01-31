@@ -77,19 +77,8 @@
             letter-spacing: 1px;
         }
         
-        .role-owner { 
-            background: rgba(239, 68, 68, 0.15); 
-            color: #ef4444; 
-            border: 1px solid rgba(239, 68, 68, 0.4); 
-            box-shadow: 0 0 15px rgba(239, 68, 68, 0.1);
-        }
+        /* Цвета ролей заданы в style.css */
         
-        .role-active {
-            background: rgba(139, 92, 246, 0.15);
-            color: var(--accent);
-            border: 1px solid var(--accent);
-        }
-
         .staff-desc { 
             color: #94a3b8; 
             font-size: 0.95rem; 
@@ -152,7 +141,7 @@
                 <div class="model-wrapper" id="skin-container-shark"></div>
                 <div class="staff-info">
                     <div class="staff-name">X_x_shark_x_X</div>
-                    <div class="staff-role role-owner">Создатель</div>
+                    <div class="staff-role role-owner">OWNER</div>
                 </div>
             </div>
 
@@ -162,7 +151,7 @@
                 <div class="model-wrapper" id="skin-container-leynar"></div>
                 <div class="staff-info">
                     <div class="staff-name">Leynar_</div>
-                    <div class="staff-role role-owner">Создатель</div>
+                    <div class="staff-role role-dev">DEVELOPER</div>
                 </div>
             </div>
         </div>
@@ -253,12 +242,8 @@
                 });
 
                 // Если проверка включена, пробуем найти настоящий скин.
-                // Если находим - меняем DripBlue_ на скин игрока.
-                // Если НЕ находим или ошибка - оставляем DripBlue_ (который уже стоит).
                 if (checkSkin) {
-                    // Базовая проверка регуляркой (Minecraft ники не могут быть такими как на скрине)
                     const isValidName = /^[a-zA-Z0-9_]{3,16}$/.test(username);
-                    
                     if (isValidName) {
                         fetch(`https://api.ashcon.app/mojang/v2/user/${username}`)
                             .then(response => {
@@ -266,15 +251,11 @@
                                 return response.json();
                             })
                             .then(data => {
-                                // Если скин кастомный, ставим его. 
-                                // Если не кастомный (обычный Стив), ничего не делаем (остается DripBlue_)
                                 if (data.textures && data.textures.custom === true) {
                                     skinViewer.loadSkin(TARGET_SKIN);
                                 }
                             })
-                            .catch(() => {
-                                // Ошибка API или игрока нет -> Ничего не делаем, DripBlue_ уже стоит.
-                            });
+                            .catch(() => {});
                     }
                 }
             }
