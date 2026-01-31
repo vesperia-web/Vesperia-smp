@@ -15,9 +15,9 @@ let currentTopicId = null;
 // INIT
 window.addEventListener('DOMContentLoaded', async () => {
     initStars();
-    initNavigation(); // Запуск SPA навигации
+    initNavigation(); 
     
-    // Загрузка контента текущей страницы
+    // Инициализация при первой загрузке
     handleRoute(window.location.pathname);
 
     // 2. АВТОРИЗАЦИЯ
@@ -28,18 +28,17 @@ window.addEventListener('DOMContentLoaded', async () => {
             await syncUserProfile(); 
             updateAuthUI();
             
-            // Перезагрузка контента после авторизации
+            // Повторная инициализация контента, если права поменялись
             handleRoute(window.location.pathname);
         }
     } catch (e) { console.error("Auth error:", e); }
 
-    // Обработчик Enter для комментариев
-    // Делегирование событий, т.к. элементы могут меняться
+    // Делегирование события Enter
     document.addEventListener('keypress', (e) => { 
         if (e.target.id === 'commentInput' && e.key === 'Enter') submitComment(); 
     });
 
-    // Закрытие dropdown при клике вне
+    // Закрытие dropdown
     document.addEventListener('click', (e) => {
         const dropdown = document.getElementById('profileDropdown');
         const trigger = document.querySelector('.auth-trigger');
@@ -52,67 +51,57 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
 });
 
-// === SPA NAVIGATION & ANIMATION ===
+// === SPA NAVIGATION ===
 function initNavigation() {
     const navLinksContainer = document.querySelector('.nav-links');
     if (!navLinksContainer) return;
 
-    // Создаем индикатор
+    // Magic Line
     const indicator = document.createElement('div');
     indicator.classList.add('nav-indicator');
     navLinksContainer.appendChild(indicator);
 
-    // Функция обновления позиции индикатора
     function moveIndicator(targetLink) {
         if (!targetLink) return;
         indicator.style.width = `${targetLink.offsetWidth}px`;
         indicator.style.left = `${targetLink.offsetLeft}px`;
     }
 
-    // Инициализация позиции для текущей активной ссылки
     const activeLink = document.querySelector('.nav-item.active');
     if (activeLink) moveIndicator(activeLink);
 
-    // Перехват кликов
     document.addEventListener('click', (e) => {
         const link = e.target.closest('a');
         if (!link) return;
 
-        // Если это ссылка внутри навигации и ведет на наш сайт
-        if (link.origin === window.location.origin && link.classList.contains('nav-item')) {
-            e.preventDefault();
+        // Если внутренняя ссылка
+        if (link.origin === window.location.origin && (link.classList.contains('nav-item') || link.getAttribute('href').endsWith('.html'))) {
             const href = link.getAttribute('href');
-            
-            // Обновляем активный класс
-            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-            link.classList.add('active');
-            moveIndicator(link);
+            // Игнорируем внешние ссылки типа discord
+            if(href.startsWith('http')) return;
 
-            // Переход
-            navigateTo(href);
+            e.preventDefault();
+
+            // Обновляем меню
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            // Ищем пункт меню, соответствующий href
+            const navItem = document.querySelector(`.nav-item[href="${href}"]`);
+            if (navItem) {
+                navItem.classList.add('active');
+                moveIndicator(navItem);
+            }
             
-            // Закрываем мобильное меню если открыто
-            document.querySelector('.nav-links').classList.remove('active');
-        }
-        // Обработка внутренних ссылок вне меню (например кнопки "назад")
-        else if (link.origin === window.location.origin && !link.target && !link.getAttribute('onclick')) {
-             e.preventDefault();
-             navigateTo(link.getAttribute('href'));
-             // Обновляем меню под новую ссылку
-             const navItem = document.querySelector(`.nav-item[href="${link.getAttribute('href')}"]`);
-             if (navItem) {
-                 document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-                 navItem.classList.add('active');
-                 moveIndicator(navItem);
-             }
+            navigateTo(href);
+
+            // Моб. меню
+            if(navLinksContainer.classList.contains('active')) navLinksContainer.classList.remove('active');
         }
     });
 }
 
 async function navigateTo(url) {
-    if (url === window.location.pathname || url === window.location.href) return;
+    if (url === window.location.pathname) return;
 
-    // Анимация исчезновения
     const container = document.querySelector('.content-container');
     container.classList.add('fade-out');
 
@@ -121,59 +110,89 @@ async function navigateTo(url) {
         const text = await response.text();
         const parser = new DOMParser();
         const doc = parser.parseFromString(text, 'text/html');
-        
-        // Ждем пока исчезнет
-        await new Promise(r => setTimeout(r, 300));
 
-        // Заменяем контент
+        // Имитация задержки для плавности
+        await new Promise(r => setTimeout(r, 400));
+
+        // Замена контента
         const newContent = doc.querySelector('.content-container').innerHTML;
         container.innerHTML = newContent;
-        
-        // Меняем класс body (для специфичных стилей страниц)
-        document.body.className = doc.body.className;
         document.title = doc.title;
+        document.body.className = doc.body.className; // Для смены фона/стилей страниц
 
-        // Обновляем URL
         window.history.pushState({}, '', url);
-
-        // Запускаем скрипты для новой страницы
         handleRoute(url);
 
-        // Анимация появления
         container.classList.remove('fade-out');
-        window.scrollTo(0, 0);
+        window.scrollTo(0,0);
 
     } catch (err) {
-        console.error('Nav error:', err);
-        window.location.href = url; // Fallback
+        console.error("Nav Error:", err);
+        window.location.href = url;
     }
 }
 
-// Роутер: определяет какую функцию запускать в зависимости от URL
 function handleRoute(url) {
     if (url.includes('forum.html')) loadTopics();
     else if (url.includes('gallery.html')) loadGallery();
     else if (url.includes('staff.html')) {
-        // Загружаем участников
         loadActiveMembers();
-        // Переинициализируем 3D скины
-        setTimeout(() => {
-             if (window.initSkinViewer) {
-                window.initSkinViewer("skin-container-shark", "X_x_shark_x_X", false);
-                window.initSkinViewer("skin-container-leynar", "Leynar_", false);
-             }
-        }, 100);
+        setTimeout(initStaffSkins, 100);
     }
-    
-    // Обновляем UI авторизации (показываем кнопки)
     updateAuthUI();
 }
 
-// Обработка кнопок браузера (Назад/Вперед)
-window.onpopstate = () => {
-    // Простая перезагрузка для корректности, или можно реализовать полноценный restore
-    window.location.reload(); 
-};
+// 3D SKINS LOGIC (Moved from HTML to JS)
+function initStaffSkins() {
+    if (typeof skinview3d === 'undefined') return;
+
+    function renderSkin(containerId, username, checkSkin) {
+        const container = document.getElementById(containerId);
+        if(!container) return;
+        container.innerHTML = ''; // очистка
+        
+        const width = container.offsetWidth;
+        const height = container.offsetHeight;
+        const DEFAULT_SKIN = 'https://minotar.net/skin/DripBlue_';
+        const TARGET_SKIN = `https://minotar.net/skin/${username}`;
+        
+        const startSkin = checkSkin ? DEFAULT_SKIN : TARGET_SKIN;
+
+        const skinViewer = new skinview3d.SkinViewer({
+            canvas: document.createElement("canvas"),
+            width: width,
+            height: height,
+            skin: startSkin
+        });
+
+        container.appendChild(skinViewer.canvas);
+
+        skinViewer.camera.position.x = 20;
+        skinViewer.camera.position.y = 15;
+        skinViewer.camera.position.z = 40;
+        skinViewer.zoom = 0.9;
+        skinViewer.animation = new skinview3d.IdleAnimation();
+        skinViewer.controls.enableRotate = true;
+        skinViewer.controls.enableZoom = true;
+
+        if (checkSkin) {
+            // Проверка на лицензию (примерная)
+            fetch(`https://api.ashcon.app/mojang/v2/user/${username}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (data && data.textures && data.textures.custom) skinViewer.loadSkin(TARGET_SKIN);
+                }).catch(()=>{});
+        }
+    }
+
+    renderSkin("skin-container-shark", "X_x_shark_x_X", false);
+    renderSkin("skin-container-leynar", "Leynar_", false);
+    
+    // Для участников в loadActiveMembers вызывается initSkinViewer (глобальная)
+    window.initSkinViewer = renderSkin;
+}
+
+window.onpopstate = () => { window.location.reload(); };
 
 // DELCARE GLOBAL FUNCTIONS
 window.login = async function() {
@@ -188,7 +207,6 @@ window.logout = async function() {
 async function syncUserProfile() {
     if (!currentUser) return;
     try {
-        // Записываем пользователя в базу или обновляем данные
         const { data } = await sb.from('users').upsert({
             id: currentUser.id,
             username: currentUser.user_metadata.full_name,
@@ -196,7 +214,6 @@ async function syncUserProfile() {
         }, { onConflict: 'id' }).select('role, status').single();
 
         if (data) {
-            // Админка теперь ТОЛЬКО из базы данных
             if (data.role === 'admin') isAdmin = true;
             if (data.status) userStatus = data.status;
         }
@@ -217,33 +234,23 @@ function updateAuthUI() {
                 ${adminDot}
             </div>
         `;
-        
-        // Создаем выпадающее меню
         createProfileDropdown(meta, safeName);
         
-        // Показываем кнопки "auth-only"
         document.querySelectorAll('.auth-only').forEach(btn => {
-            if (btn.innerText.includes('участника')) {
-                if (isAdmin) btn.style.setProperty('display', 'inline-flex', 'important');
-            } 
-            else if (btn.innerText.includes('тему') || btn.innerText.includes('фото')) {
-                btn.style.setProperty('display', 'inline-flex', 'important');
-            }
+            if (btn.innerText.includes('участника') && !isAdmin) return;
+            btn.style.setProperty('display', 'inline-flex', 'important');
         });
     }
 }
 
 function createProfileDropdown(meta, name) {
-    // Удаляем старое меню если есть
     const old = document.getElementById('profileDropdown');
     if (old) old.remove();
 
-    // Определяем статус
     let statusHTML = '<span class="d-val status-none">Нет</span>';
     if (userStatus === 'active') statusHTML = '<span class="d-val status-active">Активен</span>';
     if (userStatus === 'banned') statusHTML = '<span class="d-val status-banned">Забанен</span>';
     
-    // Дата регистрации
     const d = new Date(currentUser.created_at);
     const dateStr = d.toLocaleDateString('ru-RU');
     
@@ -271,7 +278,6 @@ function createProfileDropdown(meta, name) {
     </div>
     `;
     
-    // Вставляем В НАВИГАЦИЮ, чтобы не пропадало при смене страниц SPA
     const navCont = document.querySelector('.nav-container');
     if(navCont) navCont.insertAdjacentHTML('beforeend', html);
 }
@@ -341,15 +347,12 @@ window.loadActiveMembers = async function() {
 
 window.submitActiveMember = async function() {
     if (!isAdmin) return showToast('Доступ запрещен!', true);
-    
     const nick = document.getElementById('memberNick').value.trim();
     const desc = document.getElementById('memberDesc').value.trim();
-    
     if (!nick) return showToast('Введите ник!', true);
 
     const { data: maxData } = await sb.from('active_members').select('order_ind').order('order_ind', { ascending: false }).limit(1);
     const nextOrder = (maxData && maxData.length > 0) ? maxData[0].order_ind + 1 : 1;
-
     const { error } = await sb.from('active_members').insert([{ username: nick, description: desc, order_ind: nextOrder }]);
 
     if (!error) {
@@ -374,16 +377,10 @@ window.moveMember = async function(currentIndex, direction) {
     if (!isAdmin) return;
     const targetIndex = currentIndex + direction;
     if (targetIndex < 0 || targetIndex >= cachedMembers.length) return;
-
     const currentItem = cachedMembers[currentIndex];
     const targetItem = cachedMembers[targetIndex];
-
-    const order1 = currentItem.order_ind;
-    const order2 = targetItem.order_ind;
-
-    await sb.from('active_members').update({ order_ind: order2 }).eq('id', currentItem.id);
-    await sb.from('active_members').update({ order_ind: order1 }).eq('id', targetItem.id);
-
+    await sb.from('active_members').update({ order_ind: targetItem.order_ind }).eq('id', currentItem.id);
+    await sb.from('active_members').update({ order_ind: currentItem.order_ind }).eq('id', targetItem.id);
     loadActiveMembers();
 }
 
@@ -417,7 +414,6 @@ async function loadTopics() {
         const author = topic.users || {};
         const authorName = author.username || 'Неизвестный';
         const authorAva = author.avatar_url || DEFAULT_AVATAR;
-        
         const adminTag = (author.role === 'admin') ? '<span class="admin-tag">ADMIN</span> ' : '';
         const closedLabel = topic.is_closed ? '<span class="closed-icon"><i class="fas fa-lock"></i></span>' : '';
 
@@ -498,7 +494,6 @@ window.openTopic = async function(topicId) {
         .eq('topic_id', topicId)
         .order('created_at');
     
-    // Рендер главного поста
     let html = renderMessage(topic.users, topic.description, topic.created_at, true, topic.author_id, null);
     html += '<hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:10px 0;">';
     
@@ -511,15 +506,10 @@ window.openTopic = async function(topicId) {
 }
 
 function renderMessage(user, text, date, isOpPost, opId, commentId) {
-    // Если user null, ставим id='unknown', чтобы не было ошибки UUID
     const safeUser = user || { username: 'Игрок', avatar_url: DEFAULT_AVATAR, role: 'user', id: 'unknown', status: 'none' };
-    
     const isMe = currentUser && safeUser.id === currentUser.id;
     const isTopicAuthor = (user && user.id === opId) || isOpPost; 
     
-    const avatar = safeUser.avatar_url || DEFAULT_AVATAR;
-    const name = safeUser.username || 'Игрок';
-
     const isAdminUser = safeUser.role === 'admin';
     const isBanned = safeUser.status === 'banned';
 
@@ -527,30 +517,19 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
     const bannedTagHTML = isBanned ? '<span class="banned-tag">BANNED</span> ' : '';
     const crownHTML = (isTopicAuthor && !isOpPost) ? '<i class="fas fa-crown" style="color:#fbbf24; margin-left:5px;" title="Автор темы"></i>' : '';
     
-    // КНОПКИ АДМИНА
     let adminActions = '';
-    
-    // Показываем кнопки, только если мы админ, и целевой пользователь имеет валидный UUID
     if (isAdmin && safeUser.id !== 'unknown') {
-        // Удалить
-        const delBtn = (commentId) ? `<button class="chat-action-btn btn-chat-del" onclick="window.deleteComment(${commentId})" title="Удалить сообщение"><i class="fas fa-trash"></i></button>` : '';
-        
-        // Забанить (можно всех, кроме себя)
+        const delBtn = (commentId) ? `<button class="chat-action-btn btn-chat-del" onclick="window.deleteComment(${commentId})" title="Удалить"><i class="fas fa-trash"></i></button>` : '';
         let banBtn = '';
         if (!isMe) {
-            // ЛОГИКА КНОПКИ БАНА
+            // ЛОГИКА ПЕРЕКЛЮЧЕНИЯ КНОПКИ
             if (isBanned) {
-                // Если забанен -> кнопка Разбанить (Зеленая)
                 banBtn = `<button class="chat-action-btn btn-chat-unban" onclick="window.banUser('${safeUser.id}', false)" title="Разбанить"><i class="fas fa-user-check"></i></button>`;
             } else {
-                // Если активен -> кнопка Забанить (Желтая/Молоток)
                 banBtn = `<button class="chat-action-btn btn-chat-ban" onclick="window.banUser('${safeUser.id}', true)" title="Забанить"><i class="fas fa-gavel"></i></button>`;
             }
         }
-        
-        if (delBtn || banBtn) {
-            adminActions = `<div class="chat-admin-actions">${banBtn}${delBtn}</div>`;
-        }
+        if (delBtn || banBtn) adminActions = `<div class="chat-admin-actions">${banBtn}${delBtn}</div>`;
     }
 
     const processedText = escapeHtml(text).replace(
@@ -560,10 +539,10 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
 
     return `
     <div class="msg-row ${isMe ? 'mine' : ''}">
-        ${!isMe ? `<img src="${avatar}" class="msg-avatar">` : ''}
+        ${!isMe ? `<img src="${safeUser.avatar_url || DEFAULT_AVATAR}" class="msg-avatar">` : ''}
         <div class="msg-content">
             <div class="msg-header">
-                ${adminTagHTML}${bannedTagHTML} ${isMe ? 'Вы' : name} 
+                ${adminTagHTML}${bannedTagHTML} ${isMe ? 'Вы' : safeUser.username} 
                 ${crownHTML}
                 <span style="opacity:0.5; font-size:0.7em; margin-left:5px">${new Date(date).toLocaleTimeString().slice(0,5)}</span>
                 ${adminActions}
@@ -597,7 +576,7 @@ window.submitComment = async function() {
     }
 }
 
-// === ADMIN MODERATION FUNCTIONS ===
+// === ADMIN ACTIONS ===
 window.deleteComment = async function(commentId) {
     if (!isAdmin) return;
     if (confirm('Удалить этот комментарий?')) {
@@ -613,21 +592,16 @@ window.deleteComment = async function(commentId) {
 
 window.banUser = async function(userId, shouldBan) {
     if (!isAdmin) return;
-    
-    // Защита от ошибки UUID: если прилетел undefined/null/'unknown'
-    if (!userId || userId === 'unknown' || userId === 'undefined') {
-        showToast('Ошибка: Неверный ID пользователя', true);
-        return;
-    }
+    if (!userId || userId === 'unknown') return showToast('Ошибка ID', true);
 
-    const action = shouldBan ? 'забанить' : 'разбанить';
+    // Разбан возвращает статус 'active' (проходка), бан ставит 'banned'
     const status = shouldBan ? 'banned' : 'active';
+    const action = shouldBan ? 'забанить' : 'разбанить';
     
     if (confirm(`Вы точно хотите ${action} пользователя?`)) {
         const { error } = await sb.from('users').update({ status: status }).eq('id', userId);
         if (!error) {
             showToast(`Пользователь ${shouldBan ? 'забанен' : 'разбанен'}`);
-            // Обновляем чат, чтобы кнопка и тег сменились
             if (currentTopicId) window.openTopic(currentTopicId);
         } else {
             showToast('Ошибка: ' + error.message, true);
@@ -659,7 +633,7 @@ window.submitPhoto = async function() {
 }
 
 window.deletePhoto = async function(id) { 
-    if (!isAdmin) return; // ЗАЩИТА
+    if (!isAdmin) return;
     if(confirm('Удалить фото?')) { await sb.from('gallery').delete().eq('id', id); loadGallery(); } 
 }
 
@@ -671,10 +645,7 @@ window.closeModals = function() {
 }
 window.tryOpenModal = function(id) { 
     if (!currentUser) return showToast('Сначала войдите!', true);
-    
-    // ДОП. ЗАЩИТА: Если открываем окно добавления участника
     if (id === 'addMemberModal' && !isAdmin) return showToast('Только для админов!', true);
-
     document.getElementById(id).classList.add('active'); 
 }
 window.showToast = function(msg, isError) { 
