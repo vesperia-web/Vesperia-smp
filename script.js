@@ -9,7 +9,8 @@ const DEFAULT_AVATAR = 'https://i.postimg.cc/Pf4nb7xV/logo.png';
 
 let currentUser = null;
 let isAdmin = false;
-let userStatus = 'none'; // active, banned, none
+let userStatus = 'none'; // active (есть проходка), none (нет проходки)
+let isUserBanned = false; // true (забанен), false (нет)
 let currentTopicId = null;
 
 // INIT
@@ -207,15 +208,18 @@ window.logout = async function() {
 async function syncUserProfile() {
     if (!currentUser) return;
     try {
+        // Запрашиваем role, status (проходка) и is_banned (бан)
         const { data } = await sb.from('users').upsert({
             id: currentUser.id,
             username: currentUser.user_metadata.full_name,
             avatar_url: currentUser.user_metadata.avatar_url
-        }, { onConflict: 'id' }).select('role, status').single();
+        }, { onConflict: 'id' }).select('role, status, is_banned').single();
 
         if (data) {
             if (data.role === 'admin') isAdmin = true;
             if (data.status) userStatus = data.status;
+            // Безопасное чтение is_banned (если колонки еще нет, будет undefined, считаем false)
+            isUserBanned = data.is_banned === true; 
         }
     } catch (e) { console.error("Sync error:", e); }
 }
@@ -248,8 +252,13 @@ function createProfileDropdown(meta, name) {
     if (old) old.remove();
 
     let statusHTML = '<span class="d-val status-none">Нет</span>';
-    if (userStatus === 'active') statusHTML = '<span class="d-val status-active">Активен</span>';
-    if (userStatus === 'banned') statusHTML = '<span class="d-val status-banned">Забанен</span>';
+    
+    // Логика отображения статуса: БАН приоритетнее, чем ПРОХОДКА
+    if (isUserBanned) {
+        statusHTML = '<span class="d-val status-banned">ЗАБАНЕН</span>';
+    } else {
+        if (userStatus === 'active') statusHTML = '<span class="d-val status-active">Активен</span>';
+    }
     
     const d = new Date(currentUser.created_at);
     const dateStr = d.toLocaleDateString('ru-RU');
@@ -265,7 +274,7 @@ function createProfileDropdown(meta, name) {
         </div>
         <div class="dropdown-stats">
             <div class="d-stat">
-                <div class="d-label">Проходка</div>
+                <div class="d-label">Статус</div>
                 ${statusHTML}
             </div>
             <div style="width:1px; background:rgba(255,255,255,0.1);"></div>
@@ -389,8 +398,9 @@ async function loadTopics() {
     const grid = document.getElementById('postsGrid');
     if (!grid) return;
     
+    // Теперь запрашиваем и is_banned, чтобы корректно отображать теги
     const { data, error } = await sb.from('topics')
-        .select('*, users(username, avatar_url, role)')
+        .select('*, users(username, avatar_url, role, is_banned)')
         .order('created_at', { ascending: false });
 
     if (error || !data || data.length === 0) {
@@ -415,6 +425,7 @@ async function loadTopics() {
         const authorName = author.username || 'Неизвестный';
         const authorAva = author.avatar_url || DEFAULT_AVATAR;
         const adminTag = (author.role === 'admin') ? '<span class="admin-tag">ADMIN</span> ' : '';
+        const bannedTag = (author.is_banned === true) ? '<span class="banned-tag">BANNED</span> ' : '';
         const closedLabel = topic.is_closed ? '<span class="closed-icon"><i class="fas fa-lock"></i></span>' : '';
 
         return `
@@ -424,7 +435,7 @@ async function loadTopics() {
                     <img src="${authorAva}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">
                     <div style="display:flex; flex-direction:column; overflow:hidden;">
                         <span class="post-title">${escapeHtml(topic.title)} ${closedLabel}</span>
-                        <span class="post-meta">${adminTag}${escapeHtml(authorName)} • ${new Date(topic.created_at).toLocaleDateString()}</span>
+                        <span class="post-meta">${adminTag}${bannedTag}${escapeHtml(authorName)} • ${new Date(topic.created_at).toLocaleDateString()}</span>
                     </div>
                 </div>
                 <div class="topic-actions">${actions}</div>
@@ -436,7 +447,7 @@ async function loadTopics() {
 
 window.submitPost = async function() {
     if (!currentUser) return showToast('Нужен вход!', true);
-    if (userStatus === 'banned') return showToast('Вам запрещено создавать темы!', true);
+    if (isUserBanned) return showToast('Вы забанены и не можете создавать темы!', true);
     
     const title = document.getElementById('postTitle').value.trim();
     const content = document.getElementById('postContent').value.trim();
@@ -463,7 +474,8 @@ window.openTopic = async function(topicId) {
     const container = document.getElementById('chatContainer');
     container.innerHTML = '<div class="loading-state">Загрузка...</div>';
     
-    const { data: topic } = await sb.from('topics').select('*, users(*)').eq('id', topicId).single();
+    // Запрашиваем автора темы + is_banned
+    const { data: topic } = await sb.from('topics').select('*, users(username, avatar_url, role, status, is_banned)').eq('id', topicId).single();
     if (!topic) {
         container.innerHTML = 'Ошибка загрузки.';
         return;
@@ -489,8 +501,9 @@ window.openTopic = async function(topicId) {
         if (closedMsg) closedMsg.style.display = 'none';
     }
 
+    // Запрашиваем комментарии + is_banned авторов
     const { data: comments } = await sb.from('comments')
-        .select('*, users(username, avatar_url, role, status)')
+        .select('*, users(username, avatar_url, role, status, is_banned)')
         .eq('topic_id', topicId)
         .order('created_at');
     
@@ -506,15 +519,15 @@ window.openTopic = async function(topicId) {
 }
 
 function renderMessage(user, text, date, isOpPost, opId, commentId) {
-    const safeUser = user || { username: 'Игрок', avatar_url: DEFAULT_AVATAR, role: 'user', id: 'unknown', status: 'none' };
+    const safeUser = user || { username: 'Игрок', avatar_url: DEFAULT_AVATAR, role: 'user', id: 'unknown', is_banned: false };
     const isMe = currentUser && safeUser.id === currentUser.id;
     const isTopicAuthor = (user && user.id === opId) || isOpPost; 
     
     const isAdminUser = safeUser.role === 'admin';
-    const isBanned = safeUser.status === 'banned';
+    const isTargetBanned = safeUser.is_banned === true;
 
     const adminTagHTML = isAdminUser ? '<span class="admin-tag">ADMIN</span> ' : '';
-    const bannedTagHTML = isBanned ? '<span class="banned-tag">BANNED</span> ' : '';
+    const bannedTagHTML = isTargetBanned ? '<span class="banned-tag">BANNED</span> ' : '';
     const crownHTML = (isTopicAuthor && !isOpPost) ? '<i class="fas fa-crown" style="color:#fbbf24; margin-left:5px;" title="Автор темы"></i>' : '';
     
     let adminActions = '';
@@ -522,8 +535,8 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
         const delBtn = (commentId) ? `<button class="chat-action-btn btn-chat-del" onclick="window.deleteComment(${commentId})" title="Удалить"><i class="fas fa-trash"></i></button>` : '';
         let banBtn = '';
         if (!isMe) {
-            // ЛОГИКА ПЕРЕКЛЮЧЕНИЯ КНОПКИ
-            if (isBanned) {
+            // ЛОГИКА ПЕРЕКЛЮЧЕНИЯ КНОПКИ теперь зависит от is_banned
+            if (isTargetBanned) {
                 banBtn = `<button class="chat-action-btn btn-chat-unban" onclick="window.banUser('${safeUser.id}', false)" title="Разбанить"><i class="fas fa-user-check"></i></button>`;
             } else {
                 banBtn = `<button class="chat-action-btn btn-chat-ban" onclick="window.banUser('${safeUser.id}', true)" title="Забанить"><i class="fas fa-gavel"></i></button>`;
@@ -556,7 +569,7 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
 
 window.submitComment = async function() {
     if (!currentUser || !currentTopicId) return;
-    if (userStatus === 'banned') return showToast('Вам запрещено писать!', true);
+    if (isUserBanned) return showToast('Вы забанены и не можете писать!', true);
 
     const input = document.getElementById('commentInput');
     const text = input.value.trim();
@@ -594,12 +607,11 @@ window.banUser = async function(userId, shouldBan) {
     if (!isAdmin) return;
     if (!userId || userId === 'unknown') return showToast('Ошибка ID', true);
 
-    // Разбан возвращает статус 'active' (проходка), бан ставит 'banned'
-    const status = shouldBan ? 'banned' : 'active';
+    // Теперь меняем ТОЛЬКО is_banned. Status (проходка) остается как есть.
     const action = shouldBan ? 'забанить' : 'разбанить';
     
     if (confirm(`Вы точно хотите ${action} пользователя?`)) {
-        const { error } = await sb.from('users').update({ status: status }).eq('id', userId);
+        const { error } = await sb.from('users').update({ is_banned: shouldBan }).eq('id', userId);
         if (!error) {
             showToast(`Пользователь ${shouldBan ? 'забанен' : 'разбанен'}`);
             if (currentTopicId) window.openTopic(currentTopicId);
