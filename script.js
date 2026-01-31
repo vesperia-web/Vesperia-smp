@@ -6,8 +6,6 @@ const sb = supabase.createClient(SB_URL, SB_KEY);
 
 // DEFAULT ASSETS
 const DEFAULT_AVATAR = 'https://i.postimg.cc/Pf4nb7xV/logo.png';
-// СПИСОК НИКОВ АДМИНОВ (DISCORD username в нижнем регистре)
-const ADMIN_NICKS = ['_shark2011', 'r_leynar'];
 
 let currentUser = null;
 let isAdmin = false;
@@ -74,13 +72,7 @@ window.logout = async function() {
 async function syncUserProfile() {
     if (!currentUser) return;
     try {
-        const discordName = (currentUser.user_metadata.full_name || '').toLowerCase();
-        
-        // Проверка по хардкоду (Discord ники)
-        if (ADMIN_NICKS.some(nick => discordName.includes(nick))) {
-            isAdmin = true;
-        }
-
+        // Записываем пользователя в базу или обновляем данные
         const { data } = await sb.from('users').upsert({
             id: currentUser.id,
             username: currentUser.user_metadata.full_name,
@@ -88,7 +80,7 @@ async function syncUserProfile() {
         }, { onConflict: 'id' }).select('role, status').single();
 
         if (data) {
-            // Проверка по базе данных (если роль выдана там)
+            // Админка теперь ТОЛЬКО из базы данных
             if (data.role === 'admin') isAdmin = true;
             if (data.status) userStatus = data.status;
         }
@@ -163,8 +155,6 @@ function createProfileDropdown(meta, name) {
     </div>
     `;
     
-    // Вставляем в навигацию или в body (но лучше в nav для позиционирования)
-    // Т.к. nav-container имеет position: relative
     document.querySelector('.nav-container').insertAdjacentHTML('beforeend', html);
 }
 
@@ -310,9 +300,8 @@ async function loadTopics() {
         const authorName = author.username || 'Неизвестный';
         const authorAva = author.avatar_url || DEFAULT_AVATAR;
         
-        const authorNameLower = authorName.toLowerCase();
-        const isHardcodedAdmin = ADMIN_NICKS.some(nick => authorNameLower.includes(nick));
-        const adminTag = (author.role === 'admin' || isHardcodedAdmin) ? '<span class="admin-tag">ADMIN</span> ' : '';
+        // Только роль из БД
+        const adminTag = (author.role === 'admin') ? '<span class="admin-tag">ADMIN</span> ' : '';
         const closedLabel = topic.is_closed ? '<span class="closed-icon"><i class="fas fa-lock"></i></span>' : '';
 
         return `
@@ -405,6 +394,7 @@ window.openTopic = async function(topicId) {
 }
 
 function renderMessage(user, text, date, isOpPost, opId, commentId) {
+    // Если user null, ставим id='unknown', чтобы не было ошибки UUID
     const safeUser = user || { username: 'Игрок', avatar_url: DEFAULT_AVATAR, role: 'user', id: 'unknown', status: 'none' };
     
     const isMe = currentUser && safeUser.id === currentUser.id;
@@ -413,9 +403,7 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
     const avatar = safeUser.avatar_url || DEFAULT_AVATAR;
     const name = safeUser.username || 'Игрок';
 
-    const nameLower = name.toLowerCase();
-    const isHardcodedAdmin = ADMIN_NICKS.some(nick => nameLower.includes(nick));
-    const isAdminUser = safeUser.role === 'admin' || isHardcodedAdmin;
+    const isAdminUser = safeUser.role === 'admin';
     const isBanned = safeUser.status === 'banned';
 
     const adminTagHTML = isAdminUser ? '<span class="admin-tag">ADMIN</span> ' : '';
@@ -425,9 +413,8 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
     // КНОПКИ АДМИНА
     let adminActions = '';
     
-    // ЛОГИКА: Админ может удалять любые сообщения и банить любых игроков (кроме себя)
-    // Раньше была проверка && !isAdminUser, теперь мы ее убрали, чтобы можно было банить и других админов
-    if (isAdmin) {
+    // Показываем кнопки, только если мы админ, и целевой пользователь имеет валидный UUID
+    if (isAdmin && safeUser.id !== 'unknown') {
         // Удалить
         const delBtn = (commentId) ? `<button class="chat-action-btn btn-chat-del" onclick="window.deleteComment(${commentId})" title="Удалить сообщение"><i class="fas fa-trash"></i></button>` : '';
         
@@ -504,6 +491,13 @@ window.deleteComment = async function(commentId) {
 
 window.banUser = async function(userId, shouldBan) {
     if (!isAdmin) return;
+    
+    // Защита от ошибки UUID: если прилетел undefined/null/'unknown'
+    if (!userId || userId === 'unknown' || userId === 'undefined') {
+        showToast('Ошибка: Неверный ID пользователя', true);
+        return;
+    }
+
     const action = shouldBan ? 'забанить' : 'разбанить';
     const status = shouldBan ? 'banned' : 'active';
     
