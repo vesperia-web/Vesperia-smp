@@ -209,8 +209,8 @@
     <!-- Скрипт инициализации 3D моделей -->
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            // Делаем функцию глобальной, чтобы использовать её при загрузке динамического контента
-            window.initSkinViewer = function(containerId, username) {
+            // Третий параметр checkSkin (по умолчанию false)
+            window.initSkinViewer = function(containerId, username, checkSkin = false) {
                 const container = document.getElementById(containerId);
                 if(!container) return;
                 
@@ -248,28 +248,29 @@
                 });
 
                 // ПРОВЕРКА СКИНА НА ВАЛИДНОСТЬ / КАСТОМНОСТЬ
-                // Если API вернет ошибку (игрок не существует) или custom=false (дефолтный скин)
-                // то меняем скин на DripBlue_
-                fetch(`https://api.ashcon.app/mojang/v2/user/${username}`)
-                    .then(response => {
-                        if (!response.ok) throw new Error('Not found');
-                        return response.json();
-                    })
-                    .then(data => {
-                        // Если скин не кастомный (обычный Стив/Алекс) -> меняем на DripBlue_
-                        if (data.textures && data.textures.custom === false) {
+                // Выполняется ТОЛЬКО если checkSkin === true
+                if (checkSkin) {
+                    fetch(`https://api.ashcon.app/mojang/v2/user/${username}`)
+                        .then(response => {
+                            if (!response.ok) throw new Error('Not found');
+                            return response.json();
+                        })
+                        .then(data => {
+                            // Если скин не кастомный (обычный Стив/Алекс) -> меняем на DripBlue_
+                            if (data.textures && data.textures.custom === false) {
+                                skinViewer.loadSkin('https://minotar.net/skin/DripBlue_');
+                            }
+                        })
+                        .catch(() => {
+                            // Если ошибка (игрок не найден, нет лицензии или API лежит) -> меняем на DripBlue_
                             skinViewer.loadSkin('https://minotar.net/skin/DripBlue_');
-                        }
-                    })
-                    .catch(() => {
-                        // Если ошибка (игрок не найден, нет лицензии или API лежит) -> меняем на DripBlue_
-                        skinViewer.loadSkin('https://minotar.net/skin/DripBlue_');
-                    });
+                        });
+                }
             }
 
-            // Инициализация Создателей
-            initSkinViewer("skin-container-shark", "X_x_shark_x_X");
-            initSkinViewer("skin-container-leynar", "Leynar_");
+            // Инициализация Создателей с checkSkin = false (скин не проверяется и не заменяется)
+            initSkinViewer("skin-container-shark", "X_x_shark_x_X", false);
+            initSkinViewer("skin-container-leynar", "Leynar_", false);
         });
     </script>
 </body>
