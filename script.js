@@ -15,15 +15,10 @@ let currentTopicId = null;
 // INIT
 window.addEventListener('DOMContentLoaded', async () => {
     initStars();
+    initNavigation(); // Запуск SPA навигации
     
-    // 1. ЗАГРУЗКА КОНТЕНТА
-    const isForum = document.getElementById('postsGrid');
-    const isGallery = document.getElementById('galleryGrid');
-    const isActiveMembers = document.getElementById('activeMembersGrid');
-
-    if (isForum) loadTopics();
-    if (isGallery) loadGallery();
-    if (isActiveMembers) loadActiveMembers();
+    // Загрузка контента текущей страницы
+    handleRoute(window.location.pathname);
 
     // 2. АВТОРИЗАЦИЯ
     try {
@@ -33,18 +28,16 @@ window.addEventListener('DOMContentLoaded', async () => {
             await syncUserProfile(); 
             updateAuthUI();
             
-            // Перезагрузка контента (чтобы появились кнопки админа)
-            if (isForum) loadTopics(); 
-            if (isGallery) loadGallery();
-            if (isActiveMembers) loadActiveMembers();
+            // Перезагрузка контента после авторизации
+            handleRoute(window.location.pathname);
         }
     } catch (e) { console.error("Auth error:", e); }
 
     // Обработчик Enter для комментариев
-    const commentInput = document.getElementById('commentInput');
-    if (commentInput) {
-        commentInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') submitComment(); });
-    }
+    // Делегирование событий, т.к. элементы могут меняться
+    document.addEventListener('keypress', (e) => { 
+        if (e.target.id === 'commentInput' && e.key === 'Enter') submitComment(); 
+    });
 
     // Закрытие dropdown при клике вне
     document.addEventListener('click', (e) => {
@@ -58,6 +51,129 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
     });
 });
+
+// === SPA NAVIGATION & ANIMATION ===
+function initNavigation() {
+    const navLinksContainer = document.querySelector('.nav-links');
+    if (!navLinksContainer) return;
+
+    // Создаем индикатор
+    const indicator = document.createElement('div');
+    indicator.classList.add('nav-indicator');
+    navLinksContainer.appendChild(indicator);
+
+    // Функция обновления позиции индикатора
+    function moveIndicator(targetLink) {
+        if (!targetLink) return;
+        indicator.style.width = `${targetLink.offsetWidth}px`;
+        indicator.style.left = `${targetLink.offsetLeft}px`;
+    }
+
+    // Инициализация позиции для текущей активной ссылки
+    const activeLink = document.querySelector('.nav-item.active');
+    if (activeLink) moveIndicator(activeLink);
+
+    // Перехват кликов
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('a');
+        if (!link) return;
+
+        // Если это ссылка внутри навигации и ведет на наш сайт
+        if (link.origin === window.location.origin && link.classList.contains('nav-item')) {
+            e.preventDefault();
+            const href = link.getAttribute('href');
+            
+            // Обновляем активный класс
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            link.classList.add('active');
+            moveIndicator(link);
+
+            // Переход
+            navigateTo(href);
+            
+            // Закрываем мобильное меню если открыто
+            document.querySelector('.nav-links').classList.remove('active');
+        }
+        // Обработка внутренних ссылок вне меню (например кнопки "назад")
+        else if (link.origin === window.location.origin && !link.target && !link.getAttribute('onclick')) {
+             e.preventDefault();
+             navigateTo(link.getAttribute('href'));
+             // Обновляем меню под новую ссылку
+             const navItem = document.querySelector(`.nav-item[href="${link.getAttribute('href')}"]`);
+             if (navItem) {
+                 document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                 navItem.classList.add('active');
+                 moveIndicator(navItem);
+             }
+        }
+    });
+}
+
+async function navigateTo(url) {
+    if (url === window.location.pathname || url === window.location.href) return;
+
+    // Анимация исчезновения
+    const container = document.querySelector('.content-container');
+    container.classList.add('fade-out');
+
+    try {
+        const response = await fetch(url);
+        const text = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/html');
+        
+        // Ждем пока исчезнет
+        await new Promise(r => setTimeout(r, 300));
+
+        // Заменяем контент
+        const newContent = doc.querySelector('.content-container').innerHTML;
+        container.innerHTML = newContent;
+        
+        // Меняем класс body (для специфичных стилей страниц)
+        document.body.className = doc.body.className;
+        document.title = doc.title;
+
+        // Обновляем URL
+        window.history.pushState({}, '', url);
+
+        // Запускаем скрипты для новой страницы
+        handleRoute(url);
+
+        // Анимация появления
+        container.classList.remove('fade-out');
+        window.scrollTo(0, 0);
+
+    } catch (err) {
+        console.error('Nav error:', err);
+        window.location.href = url; // Fallback
+    }
+}
+
+// Роутер: определяет какую функцию запускать в зависимости от URL
+function handleRoute(url) {
+    if (url.includes('forum.html')) loadTopics();
+    else if (url.includes('gallery.html')) loadGallery();
+    else if (url.includes('staff.html')) {
+        // Загружаем участников
+        loadActiveMembers();
+        // Переинициализируем 3D скины
+        setTimeout(() => {
+             if (window.initSkinViewer) {
+                window.initSkinViewer("skin-container-shark", "X_x_shark_x_X", false);
+                window.initSkinViewer("skin-container-leynar", "Leynar_", false);
+             }
+        }, 100);
+    }
+    
+    // Обновляем UI авторизации (показываем кнопки)
+    updateAuthUI();
+}
+
+// Обработка кнопок браузера (Назад/Вперед)
+window.onpopstate = () => {
+    // Простая перезагрузка для корректности, или можно реализовать полноценный restore
+    window.location.reload(); 
+};
 
 // DELCARE GLOBAL FUNCTIONS
 window.login = async function() {
@@ -155,7 +271,9 @@ function createProfileDropdown(meta, name) {
     </div>
     `;
     
-    document.querySelector('.nav-container').insertAdjacentHTML('beforeend', html);
+    // Вставляем В НАВИГАЦИЮ, чтобы не пропадало при смене страниц SPA
+    const navCont = document.querySelector('.nav-container');
+    if(navCont) navCont.insertAdjacentHTML('beforeend', html);
 }
 
 window.toggleProfile = function() {
@@ -300,7 +418,6 @@ async function loadTopics() {
         const authorName = author.username || 'Неизвестный';
         const authorAva = author.avatar_url || DEFAULT_AVATAR;
         
-        // Только роль из БД
         const adminTag = (author.role === 'admin') ? '<span class="admin-tag">ADMIN</span> ' : '';
         const closedLabel = topic.is_closed ? '<span class="closed-icon"><i class="fas fa-lock"></i></span>' : '';
 
@@ -421,9 +538,14 @@ function renderMessage(user, text, date, isOpPost, opId, commentId) {
         // Забанить (можно всех, кроме себя)
         let banBtn = '';
         if (!isMe) {
-            const banBtnText = isBanned ? '<i class="fas fa-user-check"></i>' : '<i class="fas fa-gavel"></i>';
-            const banBtnTitle = isBanned ? 'Разбанить' : 'Забанить';
-            banBtn = `<button class="chat-action-btn btn-chat-ban" onclick="window.banUser('${safeUser.id}', ${!isBanned})" title="${banBtnTitle}">${banBtnText}</button>`;
+            // ЛОГИКА КНОПКИ БАНА
+            if (isBanned) {
+                // Если забанен -> кнопка Разбанить (Зеленая)
+                banBtn = `<button class="chat-action-btn btn-chat-unban" onclick="window.banUser('${safeUser.id}', false)" title="Разбанить"><i class="fas fa-user-check"></i></button>`;
+            } else {
+                // Если активен -> кнопка Забанить (Желтая/Молоток)
+                banBtn = `<button class="chat-action-btn btn-chat-ban" onclick="window.banUser('${safeUser.id}', true)" title="Забанить"><i class="fas fa-gavel"></i></button>`;
+            }
         }
         
         if (delBtn || banBtn) {
@@ -505,7 +627,8 @@ window.banUser = async function(userId, shouldBan) {
         const { error } = await sb.from('users').update({ status: status }).eq('id', userId);
         if (!error) {
             showToast(`Пользователь ${shouldBan ? 'забанен' : 'разбанен'}`);
-            window.openTopic(currentTopicId); 
+            // Обновляем чат, чтобы кнопка и тег сменились
+            if (currentTopicId) window.openTopic(currentTopicId);
         } else {
             showToast('Ошибка: ' + error.message, true);
         }
