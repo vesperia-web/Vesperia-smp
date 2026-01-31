@@ -73,7 +73,7 @@
             font-size: 0.8rem; 
             font-weight: 700; 
             text-transform: uppercase; 
-            margin-bottom: 20px;
+            margin-bottom: 5px; /* Уменьшил отступ, так как описания нет */
             letter-spacing: 1px;
         }
         
@@ -82,12 +82,6 @@
             color: #ef4444; 
             border: 1px solid rgba(239, 68, 68, 0.4); 
             box-shadow: 0 0 15px rgba(239, 68, 68, 0.1);
-        }
-
-        .staff-desc { 
-            color: #94a3b8; 
-            font-size: 0.95rem; 
-            line-height: 1.6; 
         }
 
         /* Декор за карточкой */
@@ -132,7 +126,7 @@
     <main class="content-container">
         <div class="hero">
             <h1 class="hero-title">Команда <span class="accent">Проекта</span></h1>
-            <p class="hero-subtitle">Основатели Vesperia SMP</p>
+            <p class="hero-subtitle">Создатели Vesperia SMP</p>
         </div>
 
         <div class="staff-grid">
@@ -144,8 +138,7 @@
                 
                 <div class="staff-info">
                     <div class="staff-name">X_x_shark_x_X</div>
-                    <div class="staff-role role-owner">Основатель</div>
-                    <p class="staff-desc">Технический администратор. Разработка сайта, настройка плагинов и защита сервера.</p>
+                    <div class="staff-role role-owner">Создатель</div>
                 </div>
             </div>
 
@@ -157,8 +150,7 @@
                 
                 <div class="staff-info">
                     <div class="staff-name">Leynar_</div>
-                    <div class="staff-role role-owner">Основатель</div>
-                    <p class="staff-desc">Главный куратор. Экономика, ивенты, лор и управление сообществом.</p>
+                    <div class="staff-role role-owner">Создатель</div>
                 </div>
             </div>
         </div>
@@ -203,10 +195,9 @@
                 skinViewer.controls.enableZoom = true;
                 skinViewer.controls.enablePan = false;
 
-                // Медленное автоматическое вращение
-                skinViewer.autoRotate = true;
-                skinViewer.autoRotateSpeed = 0.5;
-
+                // Автоматическое вращение ОТКЛЮЧЕНО
+                skinViewer.autoRotate = false;
+                
                 // Ресайз при изменении окна
                 window.addEventListener('resize', () => {
                     skinViewer.width = container.offsetWidth;
