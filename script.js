@@ -172,8 +172,8 @@ window.loadActiveMembers = async function() {
         
         // Init 3D Viewer if the global function exists
         if (window.initSkinViewer) {
-            // Небольшая задержка, чтобы DOM обновился
-            setTimeout(() => window.initSkinViewer(uniqueId, member.username), 100);
+            // true - ВКЛЮЧИТЬ проверку скинов для динамических участников
+            setTimeout(() => window.initSkinViewer(uniqueId, member.username, true), 100);
         }
     });
 }
