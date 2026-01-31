@@ -9,95 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Библиотека для скинов обязательна здесь -->
+    <script src="https://bs-community.github.io/skinview3d/js/skinview3d.bundle.js"></script>
     <link rel="stylesheet" href="style.css">
-    <style>
-        .staff-grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); 
-            gap: 40px; 
-            margin-top: 40px; 
-            justify-content: center;
-        }
-        
-        .staff-card {
-            background: rgba(20, 20, 25, 0.8); 
-            border: 1px solid var(--border); 
-            border-radius: 20px;
-            overflow: hidden; 
-            text-align: center; 
-            transition: 0.3s; 
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
-        }
-
-        .staff-card:hover { 
-            border-color: var(--accent); 
-            box-shadow: 0 20px 50px rgba(139, 92, 246, 0.15); 
-            transform: translateY(-5px);
-        }
-
-        /* Контейнер для 3D модели */
-        .model-wrapper {
-            width: 100%;
-            height: 350px;
-            background: radial-gradient(circle at center, rgba(139, 92, 246, 0.15), transparent 70%);
-            position: relative;
-            cursor: move; /* Показываем, что можно крутить */
-        }
-
-        .staff-info { 
-            padding: 25px; 
-            background: rgba(10, 10, 12, 0.6);
-            border-top: 1px solid rgba(255,255,255,0.05);
-            flex-grow: 1;
-            z-index: 2;
-        }
-
-        .staff-name { 
-            font-size: 1.8rem; 
-            font-weight: 900; 
-            color: white; 
-            margin-bottom: 8px; 
-            letter-spacing: -0.5px;
-            text-shadow: 0 0 20px rgba(255,255,255,0.1);
-        }
-
-        .staff-role { 
-            display: inline-block; 
-            padding: 6px 16px; 
-            border-radius: 50px; 
-            font-size: 0.8rem; 
-            font-weight: 700; 
-            text-transform: uppercase; 
-            margin-bottom: 10px;
-            letter-spacing: 1px;
-        }
-        
-        /* Цвета ролей заданы в style.css */
-        
-        .staff-desc { 
-            color: #94a3b8; 
-            font-size: 0.95rem; 
-            line-height: 1.6; 
-        }
-
-        .section-title {
-            text-align: center;
-            font-size: 2rem;
-            margin-top: 80px;
-            font-weight: 800;
-            color: white;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .add-member-btn-container {
-            text-align: center;
-            margin-top: 20px;
-        }
-    </style>
 </head>
 <body class="page-staff">
     <canvas id="star-canvas"></canvas>
