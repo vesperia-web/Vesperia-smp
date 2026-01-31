@@ -65,21 +65,23 @@ body {
     color: var(--text-muted); font-weight: 700; text-transform: uppercase;
     font-size: 0.85rem; transition: color 0.3s; letter-spacing: 0.5px; position: relative; padding: 5px 0;
     cursor: pointer;
+    z-index: 2; /* Чтобы быть над полоской */
 }
 .nav-item:hover, .nav-item.active { color: white; text-shadow: 0 0 10px var(--accent-glow); }
 
 /* MAGIC LINE INDICATOR */
 .nav-indicator {
     position: absolute;
-    bottom: 22px; /* Подстраиваем под высоту навбара */
+    bottom: 0; 
     left: 0;
     height: 3px;
     background: var(--accent);
     box-shadow: 0 -2px 10px var(--accent);
     border-radius: 2px 2px 0 0;
-    transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); /* Кубическая интерполяция (эффект пружины) */
+    transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); /* Кубическая интерполяция */
     pointer-events: none;
     width: 0;
+    z-index: 1;
 }
 
 .nav-actions { display: flex; align-items: center; gap: 15px; }
@@ -138,6 +140,9 @@ body {
 .d-stat { display: flex; flex-direction: column; align-items: center; width: 100%; }
 .d-label { color: #666; font-size: 0.65rem; text-transform: uppercase; font-weight: 700; }
 .d-val { color: white; font-weight: 600; margin-top: 2px; }
+.status-active { color: var(--green); }
+.status-banned { color: var(--red); }
+.status-none { color: var(--text-muted); }
 
 .dropdown-btn {
     background: rgba(255,255,255,0.05); color: #ccc;
@@ -151,13 +156,14 @@ body {
 
 /* CONTENT & TRANSITIONS */
 .content-container { 
-    max-width: 1100px; margin: 140px auto 80px; padding: 0 25px; flex-grow: 1; width: 100%; 
+    max-width: 1100px; margin: 110px auto 80px; padding: 0 25px; flex-grow: 1; width: 100%; 
     opacity: 1;
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transform: translateY(0);
+    transition: opacity 0.4s ease, transform 0.4s ease;
 }
 .content-container.fade-out {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(20px);
 }
 
 /* HERO */
@@ -369,6 +375,85 @@ label { font-size: 0.85rem; color: var(--text-muted); font-weight: 700; margin-l
     background: rgba(139, 92, 246, 0.15);
     color: var(--accent);
     border: 1px solid var(--accent);
+}
+
+.staff-grid { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); 
+    gap: 40px; 
+    margin-top: 40px; 
+    justify-content: center;
+}
+
+.staff-card {
+    background: rgba(20, 20, 25, 0.8); 
+    border: 1px solid var(--border); 
+    border-radius: 20px;
+    overflow: hidden; 
+    text-align: center; 
+    transition: 0.3s; 
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+}
+
+.staff-card:hover { 
+    border-color: var(--accent); 
+    box-shadow: 0 20px 50px rgba(139, 92, 246, 0.15); 
+    transform: translateY(-5px);
+}
+
+/* Контейнер для 3D модели */
+.model-wrapper {
+    width: 100%;
+    height: 350px;
+    background: radial-gradient(circle at center, rgba(139, 92, 246, 0.15), transparent 70%);
+    position: relative;
+    cursor: move;
+}
+
+.staff-info { 
+    padding: 25px; 
+    background: rgba(10, 10, 12, 0.6);
+    border-top: 1px solid rgba(255,255,255,0.05);
+    flex-grow: 1;
+    z-index: 2;
+}
+
+.staff-name { 
+    font-size: 1.8rem; 
+    font-weight: 900; 
+    color: white; 
+    margin-bottom: 8px; 
+    letter-spacing: -0.5px;
+    text-shadow: 0 0 20px rgba(255,255,255,0.1);
+}
+
+.staff-role { 
+    display: inline-block; 
+    padding: 6px 16px; 
+    border-radius: 50px; 
+    font-size: 0.8rem; 
+    font-weight: 700; 
+    text-transform: uppercase; 
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+}
+
+.section-title {
+    text-align: center;
+    font-size: 2rem;
+    margin-top: 80px;
+    font-weight: 800;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.add-member-btn-container {
+    text-align: center;
+    margin-top: 20px;
 }
 
 /* TOAST */
