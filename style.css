@@ -60,16 +60,28 @@ body {
 .nav-brand { display: flex; align-items: center; gap: 12px; font-weight: 900; letter-spacing: 1px; font-size: 1.2rem; color: white; }
 .nav-brand img { height: 38px; border-radius: 15px; }
 
-.nav-links { display: flex; gap: 30px; }
+.nav-links { display: flex; gap: 30px; position: relative; height: 100%; align-items: center; }
 .nav-item {
     color: var(--text-muted); font-weight: 700; text-transform: uppercase;
-    font-size: 0.85rem; transition: 0.3s; letter-spacing: 0.5px; position: relative; padding: 5px 0;
+    font-size: 0.85rem; transition: color 0.3s; letter-spacing: 0.5px; position: relative; padding: 5px 0;
+    cursor: pointer;
 }
 .nav-item:hover, .nav-item.active { color: white; text-shadow: 0 0 10px var(--accent-glow); }
-.nav-item.active::after {
-    content: ''; position: absolute; bottom: -24px; left: 0; width: 100%; height: 3px;
-    background: var(--accent); box-shadow: 0 -2px 10px var(--accent); border-radius: 2px 2px 0 0;
+
+/* MAGIC LINE INDICATOR */
+.nav-indicator {
+    position: absolute;
+    bottom: 22px; /* Подстраиваем под высоту навбара */
+    left: 0;
+    height: 3px;
+    background: var(--accent);
+    box-shadow: 0 -2px 10px var(--accent);
+    border-radius: 2px 2px 0 0;
+    transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); /* Кубическая интерполяция (эффект пружины) */
+    pointer-events: none;
+    width: 0;
 }
+
 .nav-actions { display: flex; align-items: center; gap: 15px; }
 .menu-toggle { display: none; background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; }
 
@@ -137,8 +149,16 @@ body {
 .dropdown-btn.logout { color: var(--red); background: rgba(239, 68, 68, 0.1); margin-top: 5px; justify-content: center; }
 .dropdown-btn.logout:hover { background: var(--red); color: white; }
 
-/* CONTENT */
-.content-container { max-width: 1100px; margin: 140px auto 80px; padding: 0 25px; flex-grow: 1; width: 100%; }
+/* CONTENT & TRANSITIONS */
+.content-container { 
+    max-width: 1100px; margin: 140px auto 80px; padding: 0 25px; flex-grow: 1; width: 100%; 
+    opacity: 1;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.content-container.fade-out {
+    opacity: 0;
+    transform: translateY(10px);
+}
 
 /* HERO */
 .hero { text-align: center; margin-bottom: 70px; }
@@ -148,11 +168,10 @@ body {
 
 /* ИСПРАВЛЕННЫЙ ГРАДИЕНТ */
 .hero-title .accent { 
-    /* Более широкий угол и больше цветов для заметности */
     background: linear-gradient(120deg, #ffffff 0%, #bca5ff 30%, var(--accent) 60%, #7c3aed 100%);
     -webkit-background-clip: text; 
     -webkit-text-fill-color: transparent;
-    display: inline-block; /* Важно, чтобы градиент не обрезался */
+    display: inline-block; 
 }
 .hero-subtitle { color: var(--text-muted); font-size: 1.1rem; max-width: 600px; margin: 0 auto 40px; }
 .hero-btns { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
@@ -258,7 +277,7 @@ body {
     opacity: 0.6; /* Всегда немного видно */
     transition: 0.2s;
 }
-.msg-row:hover .chat-admin-actions, .chat-admin-actions:hover { opacity: 1; } /* Ярче при наведении */
+.msg-row:hover .chat-admin-actions, .chat-admin-actions:hover { opacity: 1; }
 
 .chat-action-btn {
     font-size: 0.7rem; padding: 3px 7px; border-radius: 4px; border: none; cursor: pointer; color: white;
@@ -266,6 +285,9 @@ body {
 }
 .btn-chat-ban { background: rgba(251, 191, 36, 0.2); color: var(--gold); border: 1px solid rgba(251, 191, 36, 0.3); }
 .btn-chat-ban:hover { background: var(--gold); color: black; }
+.btn-chat-unban { background: rgba(16, 185, 129, 0.2); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
+.btn-chat-unban:hover { background: var(--green); color: white; }
+
 .btn-chat-del { background: rgba(239, 68, 68, 0.2); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
 .btn-chat-del:hover { background: var(--red); color: white; }
 
