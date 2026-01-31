@@ -112,7 +112,7 @@ function updateAuthUI() {
             if (btn.innerText.includes('участника')) {
                 if (isAdmin) btn.style.setProperty('display', 'inline-flex', 'important');
             } 
-            // Кнопки создания тем/фото видны всем авторизованным (или админам, если так задумано)
+            // Кнопки создания тем/фото видна всем авторизованным (или админам, если так задумано)
             else if (btn.innerText.includes('тему') || btn.innerText.includes('фото')) {
                 btn.style.setProperty('display', 'inline-flex', 'important');
             }
@@ -285,6 +285,8 @@ async function loadTopics() {
 
 window.submitPost = async function() {
     if (!currentUser) return showToast('Нужен вход!', true);
+    if (userStatus === 'banned') return showToast('Вам запрещено создавать темы!', true);
+    
     const title = document.getElementById('postTitle').value.trim();
     const content = document.getElementById('postContent').value.trim();
     if (!title || !content) return showToast('Заполните поля!', true);
@@ -301,8 +303,6 @@ window.deleteTopic = async function(id) {
 
 window.toggleTopicStatus = async function(id, s) {
     // Здесь проверка мягче: админ ИЛИ владелец (в loadTopics кнопка генерируется только им)
-    // Но лучше проверить, чтобы хакер не закрыл чужую тему
-    // Для простоты оставим UI защиту, т.к. RLS должен проверять author_id или role=admin
     await sb.from('topics').update({ is_closed: !s }).eq('id', id); loadTopics();
 }
 
@@ -340,23 +340,24 @@ window.openTopic = async function(topicId) {
     }
 
     const { data: comments } = await sb.from('comments')
-        .select('*, users(username, avatar_url, role)')
+        .select('*, users(username, avatar_url, role, status)')
         .eq('topic_id', topicId)
         .order('created_at');
     
-    let html = renderMessage(topic.users, topic.description, topic.created_at, true, topic.author_id);
+    // Рендер главного поста (null вместо commentId)
+    let html = renderMessage(topic.users, topic.description, topic.created_at, true, topic.author_id, null);
     html += '<hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:10px 0;">';
     
     if (comments) {
-        html += comments.map(c => renderMessage(c.users, c.content, c.created_at, false, topic.author_id)).join('');
+        html += comments.map(c => renderMessage(c.users, c.content, c.created_at, false, topic.author_id, c.id)).join('');
     }
     
     container.innerHTML = html;
     container.scrollTop = container.scrollHeight;
 }
 
-function renderMessage(user, text, date, isOpPost, opId) {
-    const safeUser = user || { username: 'Игрок', avatar_url: DEFAULT_AVATAR, role: 'user', id: 'unknown' };
+function renderMessage(user, text, date, isOpPost, opId, commentId) {
+    const safeUser = user || { username: 'Игрок', avatar_url: DEFAULT_AVATAR, role: 'user', id: 'unknown', status: 'none' };
     
     const isMe = currentUser && safeUser.id === currentUser.id;
     const isTopicAuthor = (user && user.id === opId) || isOpPost; 
@@ -368,11 +369,27 @@ function renderMessage(user, text, date, isOpPost, opId) {
     const nameLower = name.toLowerCase();
     const isHardcodedAdmin = ADMIN_NICKS.some(nick => nameLower.includes(nick));
     const isAdminUser = safeUser.role === 'admin' || isHardcodedAdmin;
+    const isBanned = safeUser.status === 'banned';
 
     // ПРЕФИКС ПЕРЕД ИМЕНЕМ В ЧАТЕ
     const adminTagHTML = isAdminUser ? '<span class="admin-tag">ADMIN</span> ' : '';
+    const bannedTagHTML = isBanned ? '<span class="banned-tag">BANNED</span> ' : '';
     const crownHTML = (isTopicAuthor && !isOpPost) ? '<i class="fas fa-crown" style="color:#fbbf24; margin-left:5px;" title="Автор темы"></i>' : '';
     
+    // КНОПКИ АДМИНА
+    let adminActions = '';
+    if (isAdmin && !isMe) { // Не показываем на себе
+        // Кнопка удаления (только для комментариев, не для OP поста здесь)
+        const delBtn = (!isOpPost && commentId) ? `<button class="chat-action-btn btn-chat-del" onclick="window.deleteComment(${commentId})" title="Удалить сообщение"><i class="fas fa-trash"></i></button>` : '';
+        
+        // Кнопка Бана (нельзя банить админов)
+        const banBtnText = isBanned ? '<i class="fas fa-user-check"></i>' : '<i class="fas fa-gavel"></i>';
+        const banBtnTitle = isBanned ? 'Разбанить' : 'Забанить';
+        const banBtn = !isAdminUser ? `<button class="chat-action-btn btn-chat-ban" onclick="window.banUser('${safeUser.id}', ${!isBanned})" title="${banBtnTitle}">${banBtnText}</button>` : '';
+        
+        adminActions = `<div class="chat-admin-actions">${banBtn}${delBtn}</div>`;
+    }
+
     const processedText = escapeHtml(text).replace(
         /(https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)(?:\?\S*)?)/gi, 
         '<img src="$1" class="chat-image" onclick="window.open(\'$1\', \'_blank\')">'
@@ -383,9 +400,10 @@ function renderMessage(user, text, date, isOpPost, opId) {
         ${!isMe ? `<img src="${avatar}" class="msg-avatar">` : ''}
         <div class="msg-content">
             <div class="msg-header">
-                ${adminTagHTML} ${isMe ? 'Вы' : name} 
+                ${adminTagHTML}${bannedTagHTML} ${isMe ? 'Вы' : name} 
                 ${crownHTML}
                 <span style="opacity:0.5; font-size:0.7em; margin-left:5px">${new Date(date).toLocaleTimeString().slice(0,5)}</span>
+                ${adminActions}
             </div>
             <div class="msg-bubble" ${isOpPost ? 'style="border-color:#fbbf24; background:rgba(251,191,36,0.05);"' : ''}>
                 ${processedText}
@@ -396,6 +414,8 @@ function renderMessage(user, text, date, isOpPost, opId) {
 
 window.submitComment = async function() {
     if (!currentUser || !currentTopicId) return;
+    if (userStatus === 'banned') return showToast('Вам запрещено писать!', true);
+
     const input = document.getElementById('commentInput');
     const text = input.value.trim();
     if (!text) return;
@@ -411,6 +431,36 @@ window.submitComment = async function() {
         window.openTopic(currentTopicId); 
     } else {
         showToast('Ошибка: ' + error.message, true);
+    }
+}
+
+// === ADMIN MODERATION FUNCTIONS ===
+window.deleteComment = async function(commentId) {
+    if (!isAdmin) return;
+    if (confirm('Удалить этот комментарий?')) {
+        const { error } = await sb.from('comments').delete().eq('id', commentId);
+        if (!error) {
+            showToast('Комментарий удален');
+            window.openTopic(currentTopicId); // Обновляем чат
+        } else {
+            showToast('Ошибка: ' + error.message, true);
+        }
+    }
+}
+
+window.banUser = async function(userId, shouldBan) {
+    if (!isAdmin) return;
+    const action = shouldBan ? 'забанить' : 'разбанить';
+    const status = shouldBan ? 'banned' : 'active';
+    
+    if (confirm(`Вы точно хотите ${action} пользователя?`)) {
+        const { error } = await sb.from('users').update({ status: status }).eq('id', userId);
+        if (!error) {
+            showToast(`Пользователь ${shouldBan ? 'забанен' : 'разбанен'}`);
+            window.openTopic(currentTopicId); // Обновляем чат, чтобы обновились теги и кнопки
+        } else {
+            showToast('Ошибка: ' + error.message, true);
+        }
     }
 }
 
